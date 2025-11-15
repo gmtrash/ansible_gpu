@@ -1,0 +1,130 @@
+---
+# Backup playbook - backs up important configuration files
+# Usage: ansible-playbook backup.yml
+
+- name: Backup important configuration files
+  hosts: localhost
+  connection: local
+  become: no
+  vars_files:
+    - group_vars/localhost.yml
+
+  vars:
+    backup_timestamp: "{{ ansible_date_time.iso8601_basic_short }}"
+    backup_location: "{{ backup_dir }}/backup-{{ backup_timestamp }}"
+
+  tasks:
+    - name: Create backup directory
+      file:
+        path: "{{ backup_location }}"
+        state: directory
+        mode: '0755'
+      tags: always
+
+    - name: Backup bashrc
+      copy:
+        src: "{{ home_dir }}/.bashrc"
+        dest: "{{ backup_location }}/bashrc"
+        remote_src: yes
+      when: lookup('file', home_dir + '/.bashrc', errors='ignore')
+      tags: dotfiles
+
+    - name: Backup bash_profile
+      copy:
+        src: "{{ home_dir }}/.bash_profile"
+        dest: "{{ backup_location }}/bash_profile"
+        remote_src: yes
+      when: lookup('file', home_dir + '/.bash_profile', errors='ignore')
+      tags: dotfiles
+
+    - name: Backup gitconfig
+      copy:
+        src: "{{ home_dir }}/.gitconfig"
+        dest: "{{ backup_location }}/gitconfig"
+        remote_src: yes
+      when: lookup('file', home_dir + '/.gitconfig', errors='ignore')
+      tags: dotfiles
+
+    - name: Backup vimrc
+      copy:
+        src: "{{ home_dir }}/.vimrc"
+        dest: "{{ backup_location }}/vimrc"
+        remote_src: yes
+      when: lookup('file', home_dir + '/.vimrc', errors='ignore')
+      tags: dotfiles
+
+    - name: Backup tmux.conf
+      copy:
+        src: "{{ home_dir }}/.tmux.conf"
+        dest: "{{ backup_location }}/tmux.conf"
+        remote_src: yes
+      when: lookup('file', home_dir + '/.tmux.conf', errors='ignore')
+      tags: dotfiles
+
+    - name: Backup Forge config.json
+      copy:
+        src: "{{ forge_install_dir }}/config.json"
+        dest: "{{ backup_location }}/forge-config.json"
+        remote_src: yes
+      when: lookup('file', forge_install_dir + '/config.json', errors='ignore')
+      tags: forge
+
+    - name: Backup Forge ui-config.json
+      copy:
+        src: "{{ forge_install_dir }}/ui-config.json"
+        dest: "{{ backup_location }}/forge-ui-config.json"
+        remote_src: yes
+      when: lookup('file', forge_install_dir + '/ui-config.json', errors='ignore')
+      tags: forge
+
+    - name: Export conda environment
+      shell: "{{ conda_install_dir }}/bin/conda env export -n {{ forge_conda_env }} > {{ backup_location }}/conda-{{ forge_conda_env }}.yml"
+      when: lookup('pipe', conda_install_dir + '/bin/conda env list | grep -q "^' + forge_conda_env + ' "', errors='ignore')
+      tags: conda
+
+    - name: Create backup manifest
+      copy:
+        dest: "{{ backup_location }}/MANIFEST.txt"
+        content: |
+          Backup created: {{ ansible_date_time.iso8601 }}
+          Hostname: {{ ansible_hostname }}
+          User: {{ username }}
+
+          Backed up files:
+          - ~/.bashrc
+          - ~/.bash_profile (if exists)
+          - ~/.gitconfig
+          - ~/.vimrc
+          - ~/.tmux.conf
+          - {{ forge_install_dir }}/config.json
+          - {{ forge_install_dir }}/ui-config.json
+          - Conda environment: {{ forge_conda_env }}
+
+          To restore:
+          1. Copy dotfiles back to home directory
+          2. Copy Forge configs back to {{ forge_install_dir }}
+          3. Restore conda env: conda env create -f conda-{{ forge_conda_env }}.yml
+      tags: always
+
+    - name: Create backup archive
+      archive:
+        path: "{{ backup_location }}"
+        dest: "{{ backup_dir }}/backup-{{ backup_timestamp }}.tar.gz"
+        format: gz
+      tags: always
+
+    - name: Display backup information
+      debug:
+        msg:
+          - "=========================================="
+          - "Backup Complete!"
+          - "=========================================="
+          - ""
+          - "Backup location: {{ backup_location }}"
+          - "Archive: {{ backup_dir }}/backup-{{ backup_timestamp }}.tar.gz"
+          - ""
+          - "To restore:"
+          - "  tar -xzf {{ backup_dir }}/backup-{{ backup_timestamp }}.tar.gz"
+          - "  cd backup-{{ backup_timestamp }}"
+          - "  cat MANIFEST.txt"
+      tags: always

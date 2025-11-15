@@ -1,0 +1,231 @@
+---
+# Stable Diffusion WebUI Forge Classic - ROCm setup
+
+- name: Ensure parent directory exists
+  file:
+    path: "{{ forge_install_dir | dirname }}"
+    state: directory
+    owner: "{{ username }}"
+    group: "{{ user_group }}"
+    mode: '0755'
+  tags: forge
+
+- name: Check if Forge repository exists
+  stat:
+    path: "{{ forge_install_dir }}/.git"
+  register: forge_repo_exists
+  become_user: "{{ username }}"
+  tags: forge
+
+- name: Clone Forge repository
+  git:
+    repo: "{{ forge_repo_url }}"
+    dest: "{{ forge_install_dir }}"
+    version: "{{ forge_branch }}"
+    update: yes
+  become_user: "{{ username }}"
+  when: not forge_repo_exists.stat.exists
+  tags: forge
+
+- name: Update Forge repository
+  git:
+    repo: "{{ forge_repo_url }}"
+    dest: "{{ forge_install_dir }}"
+    version: "{{ forge_branch }}"
+    update: yes
+  become_user: "{{ username }}"
+  when: forge_repo_exists.stat.exists
+  tags: forge
+
+- name: Check if ROCm environment file exists in repository
+  stat:
+    path: "{{ forge_install_dir }}/environment-forge-rocm.yml"
+  register: rocm_env_file
+  tags: forge
+
+- name: Display warning if ROCm environment file not found
+  debug:
+    msg: "WARNING: environment-forge-rocm.yml not found. You may need to create it manually."
+  when: not rocm_env_file.stat.exists
+  tags: forge
+
+- name: Check if forge-rocm conda environment exists
+  shell: "{{ conda_install_dir }}/bin/conda env list | grep -q '^{{ forge_conda_env }} '"
+  register: forge_env_exists
+  failed_when: false
+  changed_when: false
+  become_user: "{{ username }}"
+  tags: forge
+
+- name: Create forge-rocm conda environment
+  shell: "{{ conda_install_dir }}/bin/conda env create -f {{ forge_install_dir }}/environment-forge-rocm.yml"
+  become_user: "{{ username }}"
+  when: forge_env_exists.rc != 0 and rocm_env_file.stat.exists
+  args:
+    chdir: "{{ forge_install_dir }}"
+  tags: forge
+
+- name: Update forge-rocm conda environment if it exists
+  shell: "{{ conda_install_dir }}/bin/conda env update -f {{ forge_install_dir }}/environment-forge-rocm.yml -n {{ forge_conda_env }}"
+  become_user: "{{ username }}"
+  when: forge_env_exists.rc == 0 and rocm_env_file.stat.exists
+  args:
+    chdir: "{{ forge_install_dir }}"
+  tags: forge
+
+- name: Check if ROCm initialization file exists
+  stat:
+    path: "{{ forge_install_dir }}/modules_forge/initialization_rocm.py"
+  register: rocm_init_file
+  tags: forge
+
+- name: Apply ROCm patches (copy initialization_rocm.py)
+  copy:
+    src: "{{ forge_install_dir }}/modules_forge/initialization_rocm.py"
+    dest: "{{ forge_install_dir }}/modules_forge/initialization.py"
+    remote_src: yes
+    owner: "{{ username }}"
+    group: "{{ user_group }}"
+    mode: '0644'
+  when: rocm_init_file.stat.exists
+  become_user: "{{ username }}"
+  tags: forge
+
+- name: Make webui-user-rocm.sh executable
+  file:
+    path: "{{ forge_install_dir }}/webui-user-rocm.sh"
+    mode: '0755'
+  when: rocm_init_file.stat.exists
+  tags: forge
+
+- name: Create custom launch script with conda activation
+  copy:
+    dest: "{{ forge_install_dir }}/launch-rocm.sh"
+    content: |
+      #!/bin/bash
+      # Auto-generated launch script with conda activation
+
+      # Source conda
+      source "{{ conda_install_dir }}/etc/profile.d/conda.sh"
+
+      # Activate environment
+      conda activate {{ forge_conda_env }}
+
+      # Source ROCm environment
+      if [ -f /etc/profile.d/rocm.sh ]; then
+          source /etc/profile.d/rocm.sh
+      fi
+
+      # Launch WebUI
+      cd {{ forge_install_dir }}
+      exec ./webui-user-rocm.sh "$@"
+    owner: "{{ username }}"
+    group: "{{ user_group }}"
+    mode: '0755'
+  tags: forge
+
+- name: Create model directories
+  file:
+    path: "{{ forge_models_dir }}/{{ item }}"
+    state: directory
+    owner: "{{ username }}"
+    group: "{{ user_group }}"
+    mode: '0755'
+  loop:
+    - Stable-diffusion
+    - Lora
+    - VAE
+    - ControlNet
+    - ControlNetPreprocessor
+    - ESRGAN
+    - embeddings
+  tags: forge
+
+- name: Create symlinks to shared model directory
+  file:
+    src: "{{ shared_models_dir }}/{{ item }}"
+    dest: "{{ forge_models_dir }}/{{ item }}"
+    state: link
+    owner: "{{ username }}"
+    group: "{{ user_group }}"
+  loop: "{{ shared_models_types }}"
+  when: shared_models_dir is defined and shared_models_types is defined
+  tags: forge
+
+- name: Create desktop launcher (optional)
+  copy:
+    dest: "{{ home_dir }}/.local/share/applications/forge-rocm.desktop"
+    content: |
+      [Desktop Entry]
+      Version=1.0
+      Type=Application
+      Name=Stable Diffusion Forge (ROCm)
+      Comment=Launch Stable Diffusion WebUI Forge with ROCm
+      Exec={{ forge_install_dir }}/launch-rocm.sh
+      Icon=applications-graphics
+      Terminal=true
+      Categories=Graphics;
+    owner: "{{ username }}"
+    group: "{{ user_group }}"
+    mode: '0644'
+  when: configure_desktop | default(true)
+  tags: forge
+
+- name: Verify PyTorch ROCm in forge environment
+  shell: |
+    source {{ conda_install_dir }}/etc/profile.d/conda.sh
+    conda activate {{ forge_conda_env }}
+    python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'ROCm available: {torch.cuda.is_available()}')"
+  register: pytorch_verify
+  changed_when: false
+  become_user: "{{ username }}"
+  args:
+    executable: /bin/bash
+  tags: forge
+
+- name: Display PyTorch verification
+  debug:
+    msg: "{{ pytorch_verify.stdout_lines }}"
+  tags: forge
+
+- name: Create Forge information file
+  copy:
+    dest: "{{ home_dir }}/.forge-rocm-info"
+    content: |
+      # Stable Diffusion WebUI Forge Classic - ROCm Edition
+      # Generated by Ansible on {{ ansible_date_time.iso8601 }}
+
+      Installation Directory: {{ forge_install_dir }}
+      Conda Environment: {{ forge_conda_env }}
+      Model Directory: {{ forge_models_dir }}
+      {% if shared_models_dir is defined %}
+      Shared Models: {{ shared_models_dir }}
+      {% endif %}
+
+      ## Quick Start
+
+      # Activate environment:
+      conda activate {{ forge_conda_env }}
+
+      # Launch WebUI:
+      {{ forge_install_dir }}/launch-rocm.sh
+
+      # Or use webui-user-rocm.sh directly:
+      cd {{ forge_install_dir }}
+      ./webui-user-rocm.sh
+
+      ## Access WebUI
+      http://localhost:7860
+
+      ## Troubleshooting
+      - Check ROCm: rocm-smi --showproductname
+      - Check PyTorch: python -c "import torch; print(torch.cuda.is_available())"
+      - See documentation: {{ forge_install_dir }}/ROCM_SETUP.md
+
+      ## Performance Tips
+      - GPU mode: {{ forge_gpu_mode }}
+      - Command-line args: {{ forge_commandline_args }}
+    owner: "{{ username }}"
+    group: "{{ user_group }}"
+    mode: '0644'
+  tags: forge

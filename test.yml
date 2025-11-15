@@ -1,0 +1,159 @@
+---
+# Test playbook - verify system configuration without making changes
+# Usage: ansible-playbook test.yml
+
+- name: Test and verify system configuration
+  hosts: localhost
+  connection: local
+  become: no
+  vars_files:
+    - group_vars/localhost.yml
+
+  tasks:
+    - name: Check OS information
+      debug:
+        msg:
+          - "OS: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+          - "Kernel: {{ ansible_kernel }}"
+          - "Architecture: {{ ansible_architecture }}"
+      tags: always
+
+    - name: Check if user exists
+      command: id {{ username }}
+      register: user_check
+      changed_when: false
+      failed_when: false
+
+    - name: Display user info
+      debug:
+        msg: "User {{ username }} exists: {{ user_check.rc == 0 }}"
+      tags: always
+
+    - name: Check if ROCm is installed
+      command: rocm-smi --version
+      register: rocm_check
+      changed_when: false
+      failed_when: false
+      tags: rocm
+
+    - name: Display ROCm status
+      debug:
+        msg:
+          - "ROCm installed: {{ rocm_check.rc == 0 }}"
+          - "{{ rocm_check.stdout if rocm_check.rc == 0 else 'ROCm not found' }}"
+      tags: rocm
+
+    - name: Check GPU detection
+      command: rocm-smi --showproductname
+      register: gpu_check
+      changed_when: false
+      failed_when: false
+      when: rocm_check.rc == 0
+      tags: rocm
+
+    - name: Display GPU info
+      debug:
+        msg: "{{ gpu_check.stdout_lines }}"
+      when: rocm_check.rc == 0
+      tags: rocm
+
+    - name: Check if conda is installed
+      stat:
+        path: "{{ conda_install_dir }}/bin/conda"
+      register: conda_check
+      tags: conda
+
+    - name: Display conda status
+      debug:
+        msg: "Conda installed: {{ conda_check.stat.exists }}"
+      tags: conda
+
+    - name: Get conda version
+      command: "{{ conda_install_dir }}/bin/conda --version"
+      register: conda_version
+      changed_when: false
+      failed_when: false
+      when: conda_check.stat.exists
+      tags: conda
+
+    - name: Display conda version
+      debug:
+        msg: "{{ conda_version.stdout }}"
+      when: conda_check.stat.exists
+      tags: conda
+
+    - name: Check if SD Forge directory exists
+      stat:
+        path: "{{ forge_install_dir }}"
+      register: forge_dir
+      tags: forge
+
+    - name: Display Forge directory status
+      debug:
+        msg: "SD Forge directory exists: {{ forge_dir.stat.exists }}"
+      tags: forge
+
+    - name: Check if forge-rocm environment exists
+      shell: "{{ conda_install_dir }}/bin/conda env list | grep -q '^{{ forge_conda_env }} '"
+      register: forge_env
+      changed_when: false
+      failed_when: false
+      when: conda_check.stat.exists
+      tags: forge
+
+    - name: Display Forge environment status
+      debug:
+        msg: "Forge conda environment exists: {{ forge_env.rc == 0 if conda_check.stat.exists else 'Conda not installed' }}"
+      tags: forge
+
+    - name: Check PyTorch ROCm in forge environment
+      shell: |
+        source {{ conda_install_dir }}/etc/profile.d/conda.sh
+        conda activate {{ forge_conda_env }}
+        python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'ROCm available: {torch.cuda.is_available()}')" 2>&1
+      register: pytorch_check
+      changed_when: false
+      failed_when: false
+      when: conda_check.stat.exists and forge_env.rc == 0
+      args:
+        executable: /bin/bash
+      tags: forge
+
+    - name: Display PyTorch status
+      debug:
+        msg: "{{ pytorch_check.stdout_lines }}"
+      when: conda_check.stat.exists and forge_env.rc == 0 and pytorch_check.rc == 0
+      tags: forge
+
+    - name: Check git configuration
+      command: git config --global --get {{ item }}
+      register: git_config
+      changed_when: false
+      failed_when: false
+      loop:
+        - user.name
+        - user.email
+      tags: desktop
+
+    - name: Display git configuration
+      debug:
+        msg:
+          - "Git user.name: {{ git_config.results[0].stdout | default('Not set') }}"
+          - "Git user.email: {{ git_config.results[1].stdout | default('Not set') }}"
+      tags: desktop
+
+    - name: Summary
+      debug:
+        msg:
+          - "================================"
+          - "System Configuration Summary"
+          - "================================"
+          - "OS: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+          - "ROCm: {{ 'Installed' if rocm_check.rc == 0 else 'Not installed' }}"
+          - "Conda: {{ 'Installed' if conda_check.stat.exists else 'Not installed' }}"
+          - "SD Forge: {{ 'Installed' if forge_dir.stat.exists else 'Not installed' }}"
+          - "Forge Env: {{ 'Ready' if (conda_check.stat.exists and forge_env.rc == 0) else 'Not configured' }}"
+          - ""
+          - "Next steps:"
+          - "{{ '- Run: ansible-playbook main.yml --ask-become-pass' if not (rocm_check.rc == 0 and conda_check.stat.exists and forge_dir.stat.exists) else '- System is configured! Run: forge-launch' }}"
+      tags: always

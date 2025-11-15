@@ -1,0 +1,39 @@
+# Systemd service for Stable Diffusion WebUI Forge (ROCm)
+# This allows Forge to run as a system service and auto-start on boot
+#
+# Install: sudo cp forge-webui.service /etc/systemd/system/
+# Enable: sudo systemctl enable forge-webui
+# Start: sudo systemctl start forge-webui
+# Status: sudo systemctl status forge-webui
+# Logs: journalctl -u forge-webui -f
+
+[Unit]
+Description=Stable Diffusion WebUI Forge (ROCm)
+After=network.target
+
+[Service]
+Type=simple
+User={{ username }}
+Group={{ user_group }}
+WorkingDirectory={{ forge_install_dir }}
+Environment="PATH={{ conda_install_dir }}/envs/{{ forge_conda_env }}/bin:/opt/rocm/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="ROCM_HOME=/opt/rocm"
+Environment="HIP_PATH=/opt/rocm/hip"
+{% if hsa_override_gfx is defined %}
+Environment="HSA_OVERRIDE_GFX_VERSION={{ hsa_override_gfx }}"
+{% endif %}
+Environment="HSA_ENABLE_SDMA=1"
+Environment="PYTORCH_HIP_ALLOC_CONF=expandable_segments:True"
+
+# Activate conda and launch
+ExecStart=/bin/bash -c 'source {{ conda_install_dir }}/etc/profile.d/conda.sh && conda activate {{ forge_conda_env }} && {{ forge_install_dir }}/webui-user-rocm.sh'
+
+# Restart on failure
+Restart=on-failure
+RestartSec=10
+
+# Limits
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

@@ -1,351 +1,215 @@
-# Ansible GPU - QEMU/KVM GPU Passthrough Automation
+# Ansible Deployment for Ubuntu Desktop + Stable Diffusion Forge ROCm
 
-Automated deployment solution for creating Ubuntu VMs with NVIDIA GPU passthrough using QEMU/KVM and Ansible provisioning.
-
-## Overview
-
-This repository provides:
-
-- **Automated VM Creation**: QEMU/KVM VMs with NVIDIA GPU passthrough
-- **Interactive GPU Detection**: Automatically detects and configures GPU for passthrough
-- **Ansible Automation**: Complete provisioning with NVIDIA drivers and CUDA Toolkit
-- **Production Ready**: Systemd services, cloud-init, and proper configuration
-
-## Why Not Multipass?
-
-**Multipass does NOT support GPU passthrough** as of 2025. This solution uses direct QEMU/KVM with libvirt for full GPU passthrough capabilities.
-
-## Features
-
-✅ Interactive VM creation with GPU auto-detection
-✅ NVIDIA driver installation (auto-detects recommended version)
-✅ CUDA Toolkit 12.8 installation
-✅ Ubuntu 22.04/24.04 support
-✅ Cloud-init configuration
-✅ Ansible roles for modular deployment
-✅ Optional systemd service creation
+This directory contains Ansible playbooks to automatically configure a fresh Ubuntu installation with your preferred setup, including ROCm and Stable Diffusion WebUI Forge Classic.
 
 ## Quick Start
 
-### Prerequisites
-
-**On Host System:**
-- Ubuntu 22.04+ with NVIDIA GPU
-- IOMMU enabled in BIOS
-- Required packages:
-  ```bash
-  sudo apt install -y qemu-kvm libvirt-daemon-system virtinst \
-      virt-manager cloud-image-utils ansible
-  ```
-
-### Enable IOMMU (One-time setup)
-
-1. Edit GRUB:
-   ```bash
-   sudo nano /etc/default/grub
-   ```
-
-2. Add to `GRUB_CMDLINE_LINUX`:
-   - **Intel**: `intel_iommu=on iommu=pt`
-   - **AMD**: `amd_iommu=on iommu=pt`
-
-3. Update and reboot:
-   ```bash
-   sudo update-grub
-   sudo reboot
-   ```
-
-### Create VM with GPU Passthrough
+### 1. Install Ansible on Fresh Ubuntu
 
 ```bash
-# Clone this repository
-git clone https://github.com/gmtrash/ansible_gpu.git
-cd ansible_gpu
-
-# Run VM creation script
-sudo ./create-vm.sh
+sudo apt update
+sudo apt install -y ansible git
 ```
 
-The script will:
-- Detect available NVIDIA GPUs
-- Let you select which GPU to passthrough
-- Download Ubuntu 24.04 cloud image
-- Create VM with GPU configured
-- Set up cloud-init for initial provisioning
-
-### Start VM and Provision
+### 2. Clone this repository
 
 ```bash
-# Start the VM
-sudo virsh start forge-neo-gpu
+git clone <your-repo-url>
+cd sd-webui-forge-classic/ansible
+```
 
-# Wait ~2 minutes for cloud-init, then get IP
-sudo virsh domifaddr forge-neo-gpu
+### 3. Configure your settings
 
-# Configure Ansible inventory
+Edit `group_vars/localhost.yml` to customize:
+- User preferences
+- Model directories
+- ROCm settings
+- Optional applications
+
+### 4. Run the playbook
+
+```bash
+# Dry run (check mode)
+ansible-playbook main.yml --check
+
+# Actually apply
+ansible-playbook main.yml
+
+# Or run specific parts:
+ansible-playbook main.yml --tags "rocm"
+ansible-playbook main.yml --tags "forge"
+```
+
+## Playbook Structure
+
+```
+ansible/
+├── README.md                    # This file
+├── main.yml                     # Main playbook
+├── group_vars/
+│   └── localhost.yml            # Configuration variables
+├── roles/
+│   ├── base-system/             # Basic system packages
+│   ├── rocm/                    # AMD ROCm installation
+│   ├── conda/                   # Miniconda/Miniforge setup
+│   ├── forge-rocm/              # SD WebUI Forge Classic
+│   └── desktop-preferences/     # Optional: desktop configs
+└── files/
+    ├── bashrc_additions         # Shell customizations
+    └── conda_init.sh            # Conda initialization
+```
+
+## What Gets Installed
+
+### Base System (`base-system` role)
+- Build essentials (gcc, make, cmake)
+- Git, curl, wget
+- Python 3.11 build dependencies
+- System utilities (htop, vim, etc.)
+
+### ROCm (`rocm` role)
+- AMD ROCm 6.2+ repositories
+- ROCm core packages
+- rocm-smi and development tools
+- GPU architecture detection and configuration
+
+### Conda (`conda` role)
+- Miniforge (conda-forge by default)
+- Configured in ~/.bashrc
+- Auto-activation setup (optional)
+
+### SD Forge ROCm (`forge-rocm` role)
+- Clones/updates SD WebUI Forge Classic repository
+- Creates `forge-rocm` conda environment
+- Applies ROCm patches
+- Configures launch scripts
+- Optionally sets up model directories
+
+### Desktop Preferences (`desktop-preferences` role, optional)
+- Custom .bashrc additions
+- Git configuration
+- Other dotfiles
+
+## Available Tags
+
+Run specific parts of the playbook using tags:
+
+```bash
+# Install only ROCm
+ansible-playbook main.yml --tags rocm
+
+# Install only SD Forge
+ansible-playbook main.yml --tags forge
+
+# Install system packages + ROCm
+ansible-playbook main.yml --tags "base,rocm"
+
+# Skip desktop preferences
+ansible-playbook main.yml --skip-tags desktop
+```
+
+**All available tags:**
+- `base` - Base system packages
+- `rocm` - AMD ROCm installation
+- `conda` - Conda/Miniforge setup
+- `forge` - SD WebUI Forge Classic
+- `desktop` - Desktop preferences and dotfiles
+
+## Customization
+
+### Variables (`group_vars/localhost.yml`)
+
+```yaml
+# User settings
+username: aubreybailey
+home_dir: "/home/{{ username }}"
+
+# ROCm settings
+rocm_version: "6.2"
+gpu_architecture: "gfx1036"  # Auto-detected if not set
+
+# Forge settings
+forge_install_dir: "{{ home_dir }}/llm/sd-webui-forge-classic"
+forge_models_dir: "{{ forge_install_dir }}/models"
+forge_conda_env: "forge-rocm"
+
+# Optional: shared model directory
+# shared_models_dir: "/mnt/data/ai-models"
+```
+
+### Adding Your Own Tasks
+
+Create new roles in `roles/` or add tasks to existing roles:
+
+```bash
+# Create a new role
+ansible-galaxy init roles/my-custom-role
+
+# Edit main.yml to include it:
+# - import_role:
+#     name: my-custom-role
+```
+
+## Idempotency
+
+All tasks are idempotent - you can run the playbook multiple times safely:
+- Packages only install if missing
+- Config files only update if changed
+- Conda environments only create if missing
+- ROCm only installs if not present
+
+## Testing
+
+Test in a VM before running on your main system:
+
+```bash
+# Use Vagrant or a fresh Ubuntu VM
+vagrant init ubuntu/jammy64
+vagrant up
+vagrant ssh
+
+# Inside VM:
+git clone <repo>
 cd ansible
-cp inventory/hosts.ini.example inventory/hosts.ini
-# Edit hosts.ini and add your VM's IP address
-
-# Run Ansible playbook
-ansible-playbook playbooks/site.yml
-```
-
-This installs:
-- NVIDIA drivers (auto-detected version)
-- CUDA Toolkit 12.8
-- All required system dependencies
-
-## Repository Structure
-
-```
-ansible_gpu/
-├── README.md                       # This file
-├── create-vm.sh                    # Interactive VM creation script
-├── vm-template.xml                 # Libvirt XML template
-└── ansible/
-    ├── ansible.cfg                 # Ansible configuration
-    ├── inventory/
-    │   └── hosts.ini.example      # Inventory template
-    ├── playbooks/
-    │   └── site.yml               # Main playbook
-    └── roles/
-        ├── nvidia/                # NVIDIA driver installation
-        │   └── tasks/
-        │       └── main.yml
-        └── forge-neo/             # Example: Forge Neo installation
-            ├── defaults/
-            │   └── main.yml
-            ├── tasks/
-            │   └── main.yml
-            └── templates/
-                └── forge-neo.service.j2
-```
-
-## Usage Examples
-
-### Basic NVIDIA Setup Only
-
-To install just NVIDIA drivers and CUDA:
-
-```bash
-ansible-playbook playbooks/site.yml --tags nvidia
-```
-
-### Custom Application Deployment
-
-Create your own Ansible role alongside the NVIDIA role:
-
-```yaml
-# playbooks/my-app.yml
----
-- name: Deploy My Application with GPU
-  hosts: all
-  roles:
-    - nvidia
-    - my-custom-app
-```
-
-### Multiple VMs
-
-1. Edit `create-vm.sh` and change `VM_NAME` for each VM
-2. Run script multiple times
-3. Add all VMs to Ansible inventory
-4. Deploy to all with: `ansible-playbook playbooks/site.yml`
-
-## Configuration Options
-
-### VM Configuration
-
-Edit `create-vm.sh`:
-
-```bash
-VM_MEMORY="16384"  # RAM in MB
-VM_VCPUS="8"       # CPU cores
-DISK_SIZE="100G"   # Disk size
-```
-
-### Ansible Variables
-
-Edit `ansible/playbooks/site.yml`:
-
-```yaml
-vars:
-  # Auto-reboot after driver installation
-  nvidia_auto_reboot: false
-
-  # Custom installation directory
-  forge_install_dir: "/opt/myapp"
-```
-
-## VM Management
-
-```bash
-# List VMs
-sudo virsh list --all
-
-# Start VM
-sudo virsh start <vm-name>
-
-# Stop VM
-sudo virsh shutdown <vm-name>
-
-# Force stop
-sudo virsh destroy <vm-name>
-
-# Get VM IP
-sudo virsh domifaddr <vm-name>
-
-# Console access
-sudo virsh console <vm-name>
-
-# Delete VM (preserves disk)
-sudo virsh undefine <vm-name>
+ansible-playbook main.yml
 ```
 
 ## Troubleshooting
 
-### GPU Not Detected in VM
-
-1. Verify GPU passthrough:
-   ```bash
-   sudo virsh dumpxml <vm-name> | grep hostdev -A 5
-   ```
-
-2. Check IOMMU groups:
-   ```bash
-   for d in /sys/kernel/iommu_groups/*/devices/*; do
-       n=${d#*/iommu_groups/*}; n=${n%%/*}
-       printf 'IOMMU Group %s ' "$n"
-       lspci -nns "${d##*/}"
-   done | grep NVIDIA
-   ```
-
-3. Verify IOMMU is enabled:
-   ```bash
-   dmesg | grep -i iommu
-   ```
-
-### NVIDIA Driver Issues
-
-1. Check installation:
-   ```bash
-   ssh user@vm-ip
-   nvidia-smi
-   ```
-
-2. Manual installation:
-   ```bash
-   sudo ubuntu-drivers devices
-   sudo ubuntu-drivers autoinstall
-   sudo reboot
-   ```
-
-### Ansible Connection Issues
-
-1. Test SSH:
-   ```bash
-   ssh user@<VM_IP>
-   ```
-
-2. Use password auth (if needed):
-   ```bash
-   ansible-playbook playbooks/site.yml -k
-   ```
-
-3. Copy SSH key:
-   ```bash
-   ssh-copy-id user@<VM_IP>
-   ```
-
-## Advanced Usage
-
-### Custom CUDA Version
-
-Edit `ansible/roles/nvidia/tasks/main.yml` and change the CUDA version:
-
-```yaml
-- name: Install CUDA Toolkit
-  ansible.builtin.apt:
-    name:
-      - cuda-toolkit-12-6  # Change version here
+### "Failed to connect to localhost"
+```bash
+# Ensure localhost is in /etc/hosts
+echo "127.0.0.1 localhost" | sudo tee -a /etc/hosts
 ```
 
-### Additional Ansible Roles
+### "Permission denied"
+```bash
+# Run with --ask-become-pass
+ansible-playbook main.yml --ask-become-pass
+```
 
-Create your own roles in `ansible/roles/` for custom applications. The NVIDIA role can be used as a dependency.
+### ROCm installation fails
+```bash
+# Manually verify ROCm repository
+sudo apt update
+apt-cache search rocm
 
-### SSH Tunneling
+# Check Ubuntu version compatibility
+lsb_release -a
+```
 
-Access services from your local machine:
+## Export Your Current Configuration
+
+To capture your current system state, use the included export script:
 
 ```bash
-ssh -L 8080:localhost:8080 user@<VM_IP>
+./export-current-config.sh
 ```
 
-## Use Cases
+This will update `group_vars/localhost.yml` with your current settings.
 
-- **Machine Learning**: GPU-accelerated training environments
-- **AI/ML Development**: Stable Diffusion, LLMs, Computer Vision
-- **Gaming VMs**: GPU passthrough for Windows gaming VMs
-- **Rendering**: 3D rendering, video encoding
-- **Development**: Isolated GPU development environments
+## Further Reading
 
-## Example: Forge Neo Integration
-
-This repository includes an example role for deploying [Stable Diffusion WebUI Forge Neo](https://github.com/Haoming02/sd-webui-forge-classic/tree/neo):
-
-```bash
-ansible-playbook playbooks/site.yml
-```
-
-The `forge-neo` role demonstrates how to:
-- Install Python dependencies with GPU support
-- Set up PyTorch with CUDA
-- Create systemd services
-- Download ML models
-
-Use it as a template for your own GPU-accelerated applications.
-
-## System Requirements
-
-| Component | Requirement |
-|-----------|-------------|
-| Host OS | Ubuntu 22.04+ |
-| GPU | NVIDIA with passthrough support |
-| BIOS | IOMMU/VT-d enabled |
-| RAM | 16GB+ (depends on workload) |
-| Disk | 100GB+ (depends on workload) |
-| CPU | VT-x/AMD-V support |
-
-## Contributing
-
-Contributions welcome! Feel free to:
-- Add new Ansible roles for different applications
-- Improve GPU detection
-- Add support for other Linux distributions
-- Enhance documentation
-
-## License
-
-MIT License - See LICENSE file for details
-
-## Credits
-
-- QEMU/KVM and libvirt communities
-- NVIDIA CUDA documentation
-- Ansible project
-
-## Related Projects
-
-- [Forge Neo](https://github.com/Haoming02/sd-webui-forge-classic/tree/neo) - Stable Diffusion WebUI
-- [VFIO-Tools](https://github.com/PassthroughPOST/VFIO-Tools) - GPU passthrough utilities
-- [Looking Glass](https://looking-glass.io/) - Low-latency KVM frame relay
-
-## Support
-
-For issues or questions:
-- Open an issue on GitHub
-- Check the troubleshooting section above
-- Review [libvirt documentation](https://libvirt.org/docs.html)
-- Review [NVIDIA CUDA documentation](https://docs.nvidia.com/cuda/)
+- [Ansible Documentation](https://docs.ansible.com/)
+- [Ansible Best Practices](https://docs.ansible.com/ansible/latest/tips_tricks/ansible_tips_tricks.html)
+- [ROCm Installation Guide](https://rocmdocs.amd.com/en/latest/deploy/linux/quick_start.html)

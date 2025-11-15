@@ -1,0 +1,89 @@
+---
+# Quick update playbook - updates SD Forge and conda environment
+# Usage: ansible-playbook update.yml
+
+- name: Update SD Forge ROCm installation
+  hosts: localhost
+  connection: local
+  become: no
+  vars_files:
+    - group_vars/localhost.yml
+
+  tasks:
+    - name: Display update information
+      debug:
+        msg:
+          - "=========================================="
+          - "Updating SD Forge ROCm"
+          - "=========================================="
+          - ""
+          - "This will:"
+          - "- Update Forge repository to latest {{ forge_branch }} branch"
+          - "- Update conda environment dependencies"
+          - "- Re-apply ROCm patches"
+      tags: always
+
+    - name: Update Forge repository
+      git:
+        repo: "{{ forge_repo_url }}"
+        dest: "{{ forge_install_dir }}"
+        version: "{{ forge_branch }}"
+        update: yes
+        force: no
+      become_user: "{{ username }}"
+      tags: always
+
+    - name: Update conda environment
+      shell: "{{ conda_install_dir }}/bin/conda env update -f {{ forge_install_dir }}/environment-forge-rocm.yml -n {{ forge_conda_env }} --prune"
+      become_user: "{{ username }}"
+      args:
+        chdir: "{{ forge_install_dir }}"
+      tags: always
+
+    - name: Re-apply ROCm patches
+      copy:
+        src: "{{ forge_install_dir }}/modules_forge/initialization_rocm.py"
+        dest: "{{ forge_install_dir }}/modules_forge/initialization.py"
+        remote_src: yes
+        owner: "{{ username }}"
+        group: "{{ user_group }}"
+        mode: '0644'
+      become_user: "{{ username }}"
+      tags: always
+
+    - name: Verify PyTorch ROCm
+      shell: |
+        source {{ conda_install_dir }}/etc/profile.d/conda.sh
+        conda activate {{ forge_conda_env }}
+        python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'ROCm: {torch.cuda.is_available()}')"
+      register: pytorch_verify
+      changed_when: false
+      become_user: "{{ username }}"
+      args:
+        executable: /bin/bash
+      tags: always
+
+    - name: Display verification
+      debug:
+        msg: "{{ pytorch_verify.stdout_lines }}"
+      tags: always
+
+    - name: Update summary
+      debug:
+        msg:
+          - "=========================================="
+          - "Update Complete!"
+          - "=========================================="
+          - ""
+          - "SD Forge has been updated to the latest {{ forge_branch }} branch"
+          - "Conda environment has been updated"
+          - "ROCm patches have been re-applied"
+          - ""
+          - "To launch:"
+          - "  forge-launch"
+          - ""
+          - "Or manually:"
+          - "  conda activate {{ forge_conda_env }}"
+          - "  cd {{ forge_install_dir }}"
+          - "  ./webui-user-rocm.sh"
+      tags: always
