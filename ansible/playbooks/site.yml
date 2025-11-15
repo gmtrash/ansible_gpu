@@ -1,0 +1,39 @@
+---
+- name: Install Forge Neo with NVIDIA GPU Support
+  hosts: all
+  become: no
+  gather_facts: yes
+
+  vars:
+    # NVIDIA configuration
+    nvidia_auto_reboot: false  # Set to true to auto-reboot after driver install
+
+    # Forge Neo configuration
+    forge_install_dir: "/home/{{ ansible_user }}/forge-neo"
+    forge_download_default_model: true
+    forge_create_service: true
+    forge_enable_service: false
+    forge_start_service: false
+
+  tasks:
+    - name: Display target system information
+      ansible.builtin.debug:
+        msg:
+          - "Target host: {{ inventory_hostname }}"
+          - "OS: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+          - "Kernel: {{ ansible_kernel }}"
+          - "User: {{ ansible_user }}"
+
+    - name: Check if running Ubuntu 24.04 or 22.04
+      ansible.builtin.assert:
+        that:
+          - ansible_distribution == "Ubuntu"
+          - ansible_distribution_version is version('22.04', '>=')
+        fail_msg: "This playbook requires Ubuntu 22.04 or later"
+
+  roles:
+    - role: nvidia
+      tags: nvidia
+
+    - role: forge-neo
+      tags: forge-neo

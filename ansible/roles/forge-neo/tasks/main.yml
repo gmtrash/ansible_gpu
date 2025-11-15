@@ -1,0 +1,178 @@
+---
+- name: Install system dependencies
+  ansible.builtin.apt:
+    name:
+      - python3.10
+      - python3.10-venv
+      - python3.10-dev
+      - python3-pip
+      - git
+      - wget
+      - curl
+      - libgl1
+      - libglib2.0-0
+      - libsm6
+      - libxrender1
+      - libxext6
+      - libgomp1
+      - libgoogle-perftools-dev
+    state: present
+    update_cache: yes
+  become: yes
+
+- name: Create forge-neo installation directory
+  ansible.builtin.file:
+    path: "{{ forge_install_dir }}"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: '0755'
+
+- name: Clone forge-neo pinokio scripts
+  ansible.builtin.git:
+    repo: https://github.com/gmtrash/forge-neo.git
+    dest: "{{ forge_install_dir }}/forge-neo-scripts"
+    version: "{{ forge_neo_branch | default('main') }}"
+    force: no
+
+- name: Clone SD WebUI Forge Neo
+  ansible.builtin.git:
+    repo: https://github.com/Haoming02/sd-webui-forge-classic.git
+    dest: "{{ forge_install_dir }}/app"
+    version: neo
+    force: no
+
+- name: Copy webui scripts to app directory
+  ansible.builtin.copy:
+    src: "{{ forge_install_dir }}/forge-neo-scripts/{{ item }}"
+    dest: "{{ forge_install_dir }}/app/{{ item }}"
+    remote_src: yes
+    mode: '0755'
+  loop:
+    - webui.sh
+    - webui-user.sh
+
+- name: Install uv (Python package installer)
+  ansible.builtin.shell: |
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+  args:
+    creates: "{{ ansible_env.HOME }}/.cargo/bin/uv"
+  environment:
+    CARGO_HOME: "{{ ansible_env.HOME }}/.cargo"
+    RUSTUP_HOME: "{{ ansible_env.HOME }}/.rustup"
+
+- name: Add uv to PATH
+  ansible.builtin.lineinfile:
+    path: "{{ ansible_env.HOME }}/.bashrc"
+    line: 'export PATH="$HOME/.cargo/bin:$PATH"'
+    create: yes
+
+- name: Create Python virtual environment
+  ansible.builtin.command:
+    cmd: python3.10 -m venv venv
+    chdir: "{{ forge_install_dir }}/app"
+    creates: "{{ forge_install_dir }}/app/venv"
+
+- name: Upgrade pip in venv
+  ansible.builtin.pip:
+    name: pip
+    state: latest
+    virtualenv: "{{ forge_install_dir }}/app/venv"
+    virtualenv_python: python3.10
+
+- name: Install PyTorch with CUDA 12.8 support
+  ansible.builtin.shell: |
+    source venv/bin/activate
+    {{ ansible_env.HOME }}/.cargo/bin/uv pip install \
+      torch==2.7.0 torchvision==0.22.0 torchaudio==2.7.0 \
+      xformers==0.0.30 \
+      --index-url https://download.pytorch.org/whl/cu128 \
+      --force-reinstall --no-deps
+  args:
+    chdir: "{{ forge_install_dir }}/app"
+    executable: /bin/bash
+  environment:
+    PATH: "{{ ansible_env.HOME }}/.cargo/bin:{{ ansible_env.PATH }}"
+
+- name: Install additional ML packages
+  ansible.builtin.shell: |
+    source venv/bin/activate
+    {{ ansible_env.HOME }}/.cargo/bin/uv pip install -U bitsandbytes --force-reinstall --no-deps
+    {{ ansible_env.HOME }}/.cargo/bin/uv pip install https://huggingface.co/nunchaku-tech/nunchaku/resolve/main/nunchaku-1.0.1%2Btorch2.7-cp310-cp310-linux_x86_64.whl
+    {{ ansible_env.HOME }}/.cargo/bin/uv pip install https://huggingface.co/MonsterMMORPG/SECourses_Premium_Flash_Attention/resolve/main/sageattention-2.1.1-cp310-cp310-linux_x86_64.whl
+    {{ ansible_env.HOME }}/.cargo/bin/uv pip install svglib==1.5.1
+    {{ ansible_env.HOME }}/.cargo/bin/uv pip install hf-xet
+  args:
+    chdir: "{{ forge_install_dir }}/app"
+    executable: /bin/bash
+  environment:
+    PATH: "{{ ansible_env.HOME }}/.cargo/bin:{{ ansible_env.PATH }}"
+
+- name: Run initial webui setup (creates requirements and downloads models)
+  ansible.builtin.shell: |
+    source venv/bin/activate
+    bash webui.sh -f --exit
+  args:
+    chdir: "{{ forge_install_dir }}/app"
+    executable: /bin/bash
+  environment:
+    SD_WEBUI_RESTARTING: "1"
+    PATH: "{{ ansible_env.HOME }}/.cargo/bin:{{ ansible_env.PATH }}"
+  timeout: 1200
+  register: webui_setup
+  failed_when: false
+
+- name: Install huggingface-cli
+  ansible.builtin.pip:
+    name: huggingface_hub[cli]
+    virtualenv: "{{ forge_install_dir }}/app/venv"
+
+- name: Download default model (FLUX1-dev-nf4-v2) if requested
+  ansible.builtin.shell: |
+    source venv/bin/activate
+    huggingface-cli download lllyasviel/flux1-dev-bnb-nf4 \
+      flux1-dev-bnb-nf4-v2.safetensors \
+      --local-dir models/Stable-diffusion
+  args:
+    chdir: "{{ forge_install_dir }}/app"
+    executable: /bin/bash
+  when: forge_download_default_model | default(true)
+  timeout: 3600
+
+- name: Create systemd service for Forge Neo
+  ansible.builtin.template:
+    src: forge-neo.service.j2
+    dest: /etc/systemd/system/forge-neo.service
+    mode: '0644'
+  become: yes
+  when: forge_create_service | default(true)
+
+- name: Enable and start Forge Neo service
+  ansible.builtin.systemd:
+    name: forge-neo
+    enabled: "{{ forge_enable_service | default(false) }}"
+    state: "{{ 'started' if forge_start_service | default(false) else 'stopped' }}"
+    daemon_reload: yes
+  become: yes
+  when: forge_create_service | default(true)
+
+- name: Display completion message
+  ansible.builtin.debug:
+    msg: |
+      Forge Neo installation complete!
+
+      Installation directory: {{ forge_install_dir }}/app
+
+      To start manually:
+        cd {{ forge_install_dir }}/app
+        source venv/bin/activate
+        bash webui.sh
+
+      The WebUI will be available at http://{{ ansible_default_ipv4.address }}:7860
+
+      {% if forge_create_service | default(true) %}
+      Systemd service created: forge-neo.service
+      Start: sudo systemctl start forge-neo
+      Stop: sudo systemctl stop forge-neo
+      Enable on boot: sudo systemctl enable forge-neo
+      {% endif %}

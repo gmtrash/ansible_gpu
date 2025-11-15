@@ -1,0 +1,19 @@
+# Forge Neo GPU VM Inventory
+#
+# Usage:
+# 1. Copy this file to hosts.ini
+# 2. Replace the IP address with your VM's IP
+# 3. Update ansible_user if different from 'ubuntu'
+# 4. Run: ansible-playbook playbooks/site.yml
+
+[forge-neo-vms]
+# Replace with your VM's IP address
+192.168.122.100 ansible_user=ubuntu ansible_python_interpreter=/usr/bin/python3
+
+[forge-neo-vms:vars]
+# Common variables for all Forge Neo VMs
+ansible_connection=ssh
+ansible_ssh_common_args='-o StrictHostKeyChecking=no'
+
+# Optionally use password instead of SSH keys (not recommended for production)
+# ansible_ssh_pass=your_password_here

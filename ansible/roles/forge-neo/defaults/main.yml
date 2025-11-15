@@ -1,0 +1,13 @@
+---
+# Forge Neo installation defaults
+
+forge_install_dir: "/home/{{ ansible_user }}/forge-neo"
+forge_neo_branch: "main"
+
+# Model download options
+forge_download_default_model: true
+
+# Service options
+forge_create_service: true
+forge_enable_service: false
+forge_start_service: false

@@ -1,0 +1,104 @@
+---
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: yes
+    cache_valid_time: 3600
+  become: yes
+
+- name: Install required system packages
+  ansible.builtin.apt:
+    name:
+      - build-essential
+      - dkms
+      - linux-headers-{{ ansible_kernel }}
+      - pkg-config
+      - libglvnd-dev
+      - software-properties-common
+      - ubuntu-drivers-common
+    state: present
+  become: yes
+
+- name: Add NVIDIA driver PPA
+  ansible.builtin.apt_repository:
+    repo: ppa:graphics-drivers/ppa
+    state: present
+  become: yes
+
+- name: Update apt cache after adding PPA
+  ansible.builtin.apt:
+    update_cache: yes
+  become: yes
+
+- name: Detect recommended NVIDIA driver
+  ansible.builtin.shell: ubuntu-drivers devices | grep recommended | awk '{print $3}'
+  register: nvidia_driver_version
+  changed_when: false
+
+- name: Install NVIDIA driver
+  ansible.builtin.apt:
+    name: "{{ nvidia_driver_version.stdout }}"
+    state: present
+  become: yes
+  when: nvidia_driver_version.stdout != ""
+
+- name: Fallback to nvidia-driver-550 if detection fails
+  ansible.builtin.apt:
+    name: nvidia-driver-550
+    state: present
+  become: yes
+  when: nvidia_driver_version.stdout == ""
+
+- name: Install CUDA keyring
+  ansible.builtin.get_url:
+    url: https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb
+    dest: /tmp/cuda-keyring.deb
+    mode: '0644'
+  become: yes
+
+- name: Install CUDA keyring package
+  ansible.builtin.apt:
+    deb: /tmp/cuda-keyring.deb
+  become: yes
+
+- name: Update apt cache for CUDA
+  ansible.builtin.apt:
+    update_cache: yes
+  become: yes
+
+- name: Install CUDA Toolkit 12.8
+  ansible.builtin.apt:
+    name:
+      - cuda-toolkit-12-8
+      - cuda-drivers
+    state: present
+  become: yes
+
+- name: Add CUDA to PATH in profile
+  ansible.builtin.lineinfile:
+    path: /etc/profile.d/cuda.sh
+    line: "{{ item }}"
+    create: yes
+    mode: '0644'
+  become: yes
+  loop:
+    - 'export PATH=/usr/local/cuda-12.8/bin:$PATH'
+    - 'export LD_LIBRARY_PATH=/usr/local/cuda-12.8/lib64:$LD_LIBRARY_PATH'
+
+- name: Check if reboot is required
+  ansible.builtin.stat:
+    path: /var/run/reboot-required
+  register: reboot_required
+
+- name: Notify if reboot is needed
+  ansible.builtin.debug:
+    msg: "REBOOT REQUIRED - System needs to be rebooted for NVIDIA drivers to take effect"
+  when: reboot_required.stat.exists
+
+- name: Reboot if required (with confirmation)
+  ansible.builtin.reboot:
+    msg: "Rebooting to activate NVIDIA drivers"
+    reboot_timeout: 300
+  become: yes
+  when:
+    - reboot_required.stat.exists
+    - nvidia_auto_reboot | default(false)
