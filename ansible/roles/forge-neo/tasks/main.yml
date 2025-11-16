@@ -28,29 +28,12 @@
     group: "{{ ansible_user }}"
     mode: '0755'
 
-- name: Clone forge-neo pinokio scripts
-  ansible.builtin.git:
-    repo: https://github.com/gmtrash/forge-neo.git
-    dest: "{{ forge_install_dir }}/forge-neo-scripts"
-    version: "{{ forge_neo_branch | default('main') }}"
-    force: no
-
 - name: Clone SD WebUI Forge Neo
   ansible.builtin.git:
     repo: https://github.com/Haoming02/sd-webui-forge-classic.git
     dest: "{{ forge_install_dir }}/app"
     version: neo
     force: no
-
-- name: Copy webui scripts to app directory
-  ansible.builtin.copy:
-    src: "{{ forge_install_dir }}/forge-neo-scripts/{{ item }}"
-    dest: "{{ forge_install_dir }}/app/{{ item }}"
-    remote_src: yes
-    mode: '0755'
-  loop:
-    - webui.sh
-    - webui-user.sh
 
 - name: Install uv (Python package installer)
   ansible.builtin.shell: |
