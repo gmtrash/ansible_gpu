@@ -11,11 +11,11 @@ COLOR_NC='\033[0m' # No Color
 echo "=== NVIDIA GPU Passthrough Diagnostic ==="
 echo
 
-# Check if running as root for some checks
+# Check if running as root
 if [ "$EUID" -eq 0 ]; then
     echo -e "${COLOR_YELLOW}Running as root${COLOR_NC}"
 else
-    echo -e "${COLOR_YELLOW}Running as non-root (some checks may be limited)${COLOR_NC}"
+    echo -e "${COLOR_GREEN}Running as non-root${COLOR_NC}"
 fi
 echo
 
@@ -61,14 +61,14 @@ echo
 
 # 3. Check IOMMU status in kernel
 echo "=== IOMMU Status ==="
-if dmesg | grep -i -e "IOMMU enabled" -e "IOMMU: enabled" > /dev/null 2>&1; then
+# Check using sysfs (non-root method)
+if [ -d /sys/kernel/iommu_groups ] && [ -n "$(ls -A /sys/kernel/iommu_groups 2>/dev/null)" ]; then
+    IOMMU_GROUP_COUNT=$(ls /sys/kernel/iommu_groups/ | wc -l)
     echo -e "${COLOR_GREEN}IOMMU is enabled in kernel${COLOR_NC}"
-    dmesg | grep -i iommu | head -5
-elif dmesg | grep -i iommu > /dev/null 2>&1; then
-    echo -e "${COLOR_YELLOW}IOMMU mentioned in dmesg but may not be enabled${COLOR_NC}"
-    dmesg | grep -i iommu | head -5
+    echo "  IOMMU groups found: $IOMMU_GROUP_COUNT"
+    echo "  Location: /sys/kernel/iommu_groups/"
 else
-    echo -e "${COLOR_RED}IOMMU not found in kernel messages${COLOR_NC}"
+    echo -e "${COLOR_RED}IOMMU not enabled${COLOR_NC}"
     echo "You may need to enable it in BIOS and add kernel parameters"
 fi
 echo
