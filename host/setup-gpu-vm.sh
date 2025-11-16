@@ -58,7 +58,7 @@ print_step "Phase 1: Checking Prerequisites"
 echo "Checking required commands..."
 
 MISSING_CMDS=()
-for cmd in virsh virt-install qemu-img lspci ip ansible; do
+for cmd in virsh virt-install qemu-img cloud-localds lspci ip ansible; do
     if command_exists $cmd; then
         print_success "$cmd found"
     else
