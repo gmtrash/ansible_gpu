@@ -240,10 +240,13 @@ virsh define "$VM_XML"
 
 rm "$VM_XML"
 
+# Clear sensitive data from memory
+unset VM_PASSWORD
+
 echo -e "\n${GREEN}=== VM Created Successfully! ===${NC}"
 echo -e "VM Name: ${VM_NAME}"
 echo -e "Username: ${VM_USER}"
-echo -e "Password: ${VM_PASSWORD}"
+echo -e "(Password: set during VM creation - not displayed for security)"
 echo -e ""
 echo -e "Start the VM with: ${YELLOW}virsh start ${VM_NAME}${NC}"
 echo -e "Connect to console: ${YELLOW}virsh console ${VM_NAME}${NC}"
