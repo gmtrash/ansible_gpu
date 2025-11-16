@@ -171,7 +171,8 @@ echo -e "${GREEN}Cloud-init ISO created${NC}"
 echo -e "\n${YELLOW}Creating VM definition...${NC}"
 
 VM_XML=$(mktemp)
-cp "$(dirname "$0")/vm-template.xml" "$VM_XML"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cp "$SCRIPT_DIR/configs/vm-template.xml" "$VM_XML"
 
 # Update VM name, memory, vcpus
 sed -i "s|<name>.*</name>|<name>${VM_NAME}</name>|" "$VM_XML"
