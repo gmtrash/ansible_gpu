@@ -202,10 +202,12 @@ if [ "$HAS_AUDIO" = true ]; then
 fi
 
 # Replace placeholder GPU section
-sed -i '/<!-- GPU Passthrough - REPLACE WITH YOUR GPU PCI ADDRESS -->/,/-->$/c\'"$GPU_HOSTDEV" "$VM_XML"
+sed -i '/<!-- GPU Passthrough - REPLACE WITH YOUR GPU PCI ADDRESS -->/,/-->$/c\
+'"$GPU_HOSTDEV" "$VM_XML"
 
 if [ "$HAS_AUDIO" = true ]; then
-    sed -i '/<!-- GPU Audio device/,/-->$/c\'"$AUDIO_HOSTDEV" "$VM_XML"
+    sed -i '/<!-- GPU Audio device/,/-->$/c\
+'"$AUDIO_HOSTDEV" "$VM_XML"
 fi
 
 # Enable IOMMU if needed
