@@ -1,544 +1,467 @@
 # NVIDIA GPU Automation Suite
 
-Production-ready automation for NVIDIA GPU passthrough, virtual machines, and AI/ML workloads. Supports both VM-based deployments and standalone Ubuntu installations.
+Production-ready automation for NVIDIA GPU passthrough, KVM/QEMU virtual machines, and Stable Diffusion deployments on Ubuntu.
 
-## Overview
+## What This Does
 
-This repository provides battle-tested automation for:
+Turn a fresh Ubuntu system into a GPU-accelerated AI/ML workstation in under an hour. Choose your deployment model:
+- **GPU Passthrough** - Configure VFIO for passing NVIDIA GPUs to VMs (toggle between host/VM use)
+- **VM Deployment** - Automated Ubuntu VMs with GPU passthrough + Stable Diffusion Forge Neo
+- **Standalone** - Direct installation on bare metal with full NVIDIA/CUDA stack
 
-### 🎯 GPU Passthrough (Production-Tested)
-- **Softdep method** - Industry standard (Arch Wiki recommended)
-- **Toggle functionality** - Switch GPU between VMs and host without reinstalling
-- **Auto-detection** - Automatic GPU PCI address and device ID detection
-- **Safe fallback** - NVIDIA drivers can still load if VFIO fails
-- **Comprehensive diagnostics** - Verify setup at every stage
+All paths use Ansible for reproducible, idempotent deployments.
 
-### 🖥️ VM Deployment
-- **KVM/QEMU VM creation** with GPU passthrough
-- **Dual networking** (host access + LAN access)
-- **Automated Ubuntu installation** with GPU support
-- **Forge Neo/CUDA setup** via Ansible
+---
 
-### 🚀 Standalone Deployment
-- **Direct Ubuntu installation** automation
-- **Complete NVIDIA/CUDA stack** setup
-- **Conda environment** management
-- **Stable Diffusion Forge** with CUDA support
-- **Desktop preferences** and bash aliases
+## Prerequisites
 
-## Execution Contexts
+**Required:**
+- Ubuntu 22.04 or 24.04 (host)
+- CPU with IOMMU support (Intel VT-d or AMD-Vi)
+- NVIDIA GPU (discrete, not your display GPU for passthrough scenarios)
+- 16GB+ RAM (32GB recommended for VMs)
+- 100GB+ free disk space
 
-This repository supports three distinct execution contexts. **Understanding where each script runs is critical:**
+**Skills:**
+- Basic command line familiarity
+- Understanding of VMs (for VM deployment path)
+- Sudo access
 
-### 🖥️ Host Scripts (`host/`)
-**Run on your hypervisor/host machine** to configure GPU passthrough and manage VMs.
+---
 
-- **GPU Passthrough**: `diagnostic.sh`, `system-config.sh`, `toggle-passthrough.sh`, `rollback.sh`
-- **VM Management**: `setup-gpu-vm.sh`, `vm/create-vm.sh`, `vm/add-gpu-to-vm.sh`, `vm/hide-vm-detection.sh`
-- **Troubleshooting**: `fixes/fix-vfio-permissions.sh`, `fixes/fix-memlock-limits.sh`, `fixes/fix-dns.sh`, `fixes/fix-socat-service.sh`
+## Which Path Should I Take?
 
-### 💻 Guest Scripts (`guest/`)
-**Run inside the VM** after it's created (via SSH or console).
+```
+┌─ Do you want to use VMs for isolation? ─────────────────────┐
+│                                                              │
+│  YES ──┐                                       NO ──────┐    │
+│        │                                                │    │
+│        ▼                                                ▼    │
+│  Is GPU passthrough                              STANDALONE  │
+│  already configured?                             Path C      │
+│        │                                         (page down) │
+│        │                                                     │
+│   YES ─┼─ NO                                                │
+│        │   │                                                 │
+│        ▼   ▼                                                 │
+│    Path B  Path A                                            │
+│    VM      GPU                                               │
+│    Deploy  Passthrough                                       │
+│    (below) Setup (below)                                     │
+└──────────────────────────────────────────────────────────────┘
+```
 
-- **Network Configuration**: `configure-ubuntu-nat.sh` - Configure second network interface
-
-### 🚀 Standalone Scripts (`standalone/`)
-**Run on bare Ubuntu** (no VM, direct installation on physical/bare metal Ubuntu).
-
-- **Deployment**: `quick-start.sh` - Main deployment entry point
-- **Validation**: `validate-config.sh` - Pre-flight configuration checks
-- **Export**: `export-current-config.sh` - Export current system config
-
-### 📦 Ansible Playbooks
-**Execution context specified in each playbook:**
-
-- `ansible/playbooks/site.yml` → **GUEST** (targets remote VM via SSH)
-- `ansible/playbooks/main-standalone.yml` → **STANDALONE** (targets localhost)
-- `ansible/backup.yml` → **STANDALONE** (targets localhost)
-- `ansible/install-systemd-service.yml` → **STANDALONE** (targets localhost)
+**Still not sure?**
+- **Path A (GPU Passthrough)** - You have a host with an NVIDIA GPU you want to pass to VMs. This configures VFIO and gives you toggle capability.
+- **Path B (VM Deployment)** - You want a complete Ubuntu VM running Stable Diffusion with GPU acceleration. Includes everything.
+- **Path C (Standalone)** - You want Stable Diffusion directly on your Ubuntu desktop/server. No VMs, just CUDA + Forge.
 
 ---
 
 ## Quick Start
 
-Choose your deployment path:
+### Path A: GPU Passthrough Configuration (Host Only)
 
-### Option A: GPU Passthrough Setup (Host Machine)
+**What this does:** Configures your NVIDIA GPU for VM passthrough using the industry-standard softdep method. Afterwards, you can toggle the GPU between host and VM use.
 
-Configure your host for GPU passthrough using the industry-standard softdep method:
+**Time:** ~20 minutes + reboot
 
 ```bash
-# 1. Run diagnostics to verify prerequisites (HOST)
+# 1. Run diagnostics
 ./host/diagnostic.sh
 
-# 2. Configure GPU passthrough - one-time setup (HOST)
+# 2. Configure GPU passthrough
 sudo ./host/system-config.sh
 
-# 3. Reboot
+# 3. Reboot to apply changes
 sudo reboot
 
-# 4. Verify it worked (HOST)
+# 4. Verify it worked
 ./host/diagnostic.sh
-lspci -k | grep -A 2 VGA  # Should show "vfio-pci" for passthrough GPU
+lspci -k | grep -A 2 VGA  # Should show "vfio-pci" for your passthrough GPU
 ```
 
-**Toggle GPU between VMs and host:**
+**Toggle GPU later:**
 ```bash
-# Disable passthrough (use GPU on host for gaming/desktop) (HOST)
-sudo ./host/toggle-passthrough.sh disable
-sudo reboot
+# Use GPU on host (disable passthrough)
+sudo ./host/toggle-passthrough.sh disable && sudo reboot
 
-# Re-enable passthrough (use GPU for VMs) (HOST)
-sudo ./host/toggle-passthrough.sh enable
-sudo reboot
+# Use GPU in VMs (enable passthrough)
+sudo ./host/toggle-passthrough.sh enable && sudo reboot
 ```
 
-See [docs/PASSTHROUGH-QUICKSTART.md](docs/PASSTHROUGH-QUICKSTART.md) for details.
+**Next:** Use `./host/vm/create-vm.sh` to create VMs with GPU passthrough, or proceed to Path B.
 
-### Option B: VM Deployment with GPU Passthrough
+📖 **Full guide:** [docs/PASSTHROUGH-QUICKSTART.md](docs/PASSTHROUGH-QUICKSTART.md)
 
-Create a VM with GPU passthrough and install Forge Neo:
+---
+
+### Path B: VM with GPU Passthrough + Forge Neo
+
+**What this does:** Creates an Ubuntu 24.04 VM with your NVIDIA GPU passed through, then installs Stable Diffusion WebUI Forge Neo with full CUDA support.
+
+**Prerequisites:** GPU passthrough configured (Path A above)
+
+**Time:** ~1-2 hours (mostly automated downloads)
 
 ```bash
-# 1. Run the interactive VM setup script (HOST)
+# 1. Create VM with GPU passthrough
 ./host/setup-gpu-vm.sh
+# Follow prompts: select GPU, set username/password, configure networking
 
-# 2. After VM is created, install Forge Neo (HOST → GUEST via Ansible)
+# 2. Wait for VM to boot (~2 minutes)
+# The script will show you the VM's IP address
+
+# 3. Install Forge Neo in the VM (run from host)
 cd ansible
-# Edit inventory/hosts.ini with your VM IP
-ansible-playbook -i inventory/hosts.ini playbooks/site.yml
+cp inventory/hosts.ini.example inventory/hosts.ini
+# Edit hosts.ini: set ansible_host=<VM-IP>
 
-# 3. Access WebUI
+ansible-playbook -i inventory/hosts.ini playbooks/site.yml
+# This installs: NVIDIA drivers, CUDA 12.8, PyTorch 2.7, Forge Neo, default model
+
+# 4. Access the WebUI
 # From host: http://192.168.122.XX:7860
 # From LAN: http://192.168.1.XX:7860
 ```
 
-See [SETUP-GPU-PASSTHROUGH.md](SETUP-GPU-PASSTHROUGH.md) for details.
+**What you get:**
+- Ubuntu 24.04 VM with GPU passthrough
+- NVIDIA drivers + CUDA 12.8 + PyTorch 2.7
+- Stable Diffusion WebUI Forge Neo
+- FLUX1-dev-nf4-v2 model (~8GB)
+- Dual networking (host access + LAN access)
+- Systemd service (auto-start on boot)
 
-### Option C: Standalone Ubuntu Installation
+📖 **Full guide:** [SETUP-GPU-PASSTHROUGH.md](SETUP-GPU-PASSTHROUGH.md)
 
-Install complete NVIDIA/CUDA stack on bare Ubuntu (no VM):
+---
+
+### Path C: Standalone Installation (Bare Metal)
+
+**What this does:** Installs complete NVIDIA/CUDA stack + Stable Diffusion Forge directly on your Ubuntu system. No VMs.
+
+**Time:** ~45-60 minutes
 
 ```bash
-# 1. Validate configuration (STANDALONE)
+# 1. Configure your preferences
+cd ansible
+cp group_vars/localhost.yml.example group_vars/localhost.yml
+# Edit localhost.yml: set your username, git config, paths
+
+# 2. Validate configuration
 ./standalone/validate-config.sh
 
-# 2. Run interactive deployment (STANDALONE)
+# 3. Run deployment
 ./standalone/quick-start.sh
+# Installs: NVIDIA drivers, CUDA 12.6, Conda, Forge, PyTorch, ML packages
 
-# 3. After reboot, verify and launch (STANDALONE)
-nvidia-smi
+# 4. Reboot
+sudo reboot
+
+# 5. Launch Forge
 conda activate forge-cuda
 forge-launch  # Access at http://localhost:7860
 ```
 
-See ansible roles documentation for customization.
+**What you get:**
+- NVIDIA drivers (550+) + CUDA Toolkit
+- Conda environment with PyTorch + CUDA
+- Stable Diffusion Forge repository
+- Desktop shortcuts and bash aliases
+- Optional systemd service
 
-## Repository Structure
+📖 **Full guide:** See `ansible/playbooks/main-standalone.yml` for all roles
 
-```
-.
-├── README.md                           # This file - overview and quick start
-├── SETUP-GPU-PASSTHROUGH.md            # Complete VM setup guide
-├── QUICKREF.md                         # Command reference
-├── GPU-PASSTHROUGH-STANDALONE.md       # Alternative passthrough guide
-├── configure-dual-networking.md        # Network setup details
-│
-├── host/                               # 🖥️  HOST scripts (run on hypervisor)
-│   ├── diagnostic.sh                  # GPU passthrough diagnostics
-│   ├── system-config.sh               # Configure GPU passthrough (softdep)
-│   ├── toggle-passthrough.sh          # Toggle GPU between VMs/host
-│   ├── rollback.sh                    # Remove passthrough config
-│   ├── setup-gpu-vm.sh                # Interactive VM setup wizard
-│   │
-│   ├── vm/                            # VM creation & management
-│   │   ├── create-vm.sh              # Create VM with GPU passthrough
-│   │   ├── add-gpu-to-vm.sh          # Add GPU to existing VM
-│   │   └── hide-vm-detection.sh      # Hide hypervisor from Windows
-│   │
-│   └── fixes/                         # Host-side troubleshooting
-│       ├── fix-vfio-permissions.sh   # Fix GPU device permissions
-│       ├── fix-memlock-limits.sh     # Increase memory lock limits
-│       ├── fix-dns.sh                # Fix DNS for VMs
-│       └── fix-socat-service.sh      # Configure port forwarding
-│
-├── guest/                              # 💻 GUEST scripts (run inside VM)
-│   └── configure-ubuntu-nat.sh        # Configure second NIC in VM
-│
-├── standalone/                         # 🚀 STANDALONE scripts (bare Ubuntu)
-│   ├── quick-start.sh                 # Interactive deployment wizard
-│   ├── validate-config.sh             # Pre-deployment validation
-│   └── export-current-config.sh       # Export system config
-│
-├── configs/                            # VM XML configurations
-│   ├── vm-template.xml                # VM definition template
-│   ├── ubuntu-ml.xml                  # Example Ubuntu ML VM
-│   ├── ubuntu-nat-interface.xml       # NAT network config
-│   └── libvirt-macvtap-network.xml    # Macvtap network config
-│
-├── docs/                               # Additional documentation
-│   ├── PASSTHROUGH-QUICKSTART.md      # GPU passthrough quick reference
-│   ├── PASSTHROUGH-IMPROVEMENTS.md    # Softdep method technical details
-│   └── PASSTHROUGH-DETAILED.md        # Complete architecture guide
-│
-└── ansible/                            # 📦 Ansible automation
-    ├── ansible.cfg                     # Ansible configuration
-    ├── backup.yml                      # Backup playbook (STANDALONE)
-    ├── install-systemd-service.yml     # Service installer (STANDALONE)
-    │
-    ├── inventory/                      # Host inventory files
-    │   └── hosts.ini.example           # Inventory template
-    │
-    ├── group_vars/                     # Configuration variables
-    │   └── localhost.yml.example       # Config template
-    │
-    ├── playbooks/
-    │   ├── site.yml                    # GUEST deployment (Forge Neo)
-    │   └── main-standalone.yml         # STANDALONE deployment
-    │
-    └── roles/
-        ├── base-system/                # Foundation packages
-        ├── conda/                      # Conda/Miniforge setup
-        ├── desktop-preferences/        # User environment
-        ├── nvidia/                     # NVIDIA drivers (GUEST)
-        ├── nvidia-cuda/                # NVIDIA + CUDA (STANDALONE)
-        ├── forge-neo/                  # Forge Neo (GUEST)
-        └── forge-cuda/                 # Forge + CUDA (STANDALONE)
-```
+---
 
-## What Gets Installed
+## Documentation
 
-### GPU Passthrough Setup (Host)
-- **VFIO configuration** using softdep method
-- **Kernel parameters** for IOMMU
-- **GPU isolation** from host drivers
-- **Toggle capability** to switch GPU between modes
-- **Diagnostic tools** for verification
+### For New Users
+| Guide | Purpose |
+|-------|---------|
+| [README.md](README.md) | This file - overview and quick start |
+| [QUICKREF.md](QUICKREF.md) | Command cheat sheet for daily use |
+
+### GPU Passthrough
+| Guide | Purpose |
+|-------|---------|
+| [docs/PASSTHROUGH-QUICKSTART.md](docs/PASSTHROUGH-QUICKSTART.md) | Daily operations (toggle GPU, troubleshoot) |
+| [docs/PASSTHROUGH-IMPROVEMENTS.md](docs/PASSTHROUGH-IMPROVEMENTS.md) | Why softdep method (technical) |
+| [docs/PASSTHROUGH-DETAILED.md](docs/PASSTHROUGH-DETAILED.md) | Complete architecture and troubleshooting |
 
 ### VM Deployment
-**On the Host:**
-- QEMU/KVM virtualization
-- libvirt for VM management
-- VFIO drivers for GPU isolation
+| Guide | Purpose |
+|-------|---------|
+| [SETUP-GPU-PASSTHROUGH.md](SETUP-GPU-PASSTHROUGH.md) | Complete VM setup guide with networking |
+| [configure-dual-networking.md](configure-dual-networking.md) | Macvtap + NAT network setup details |
 
-**In the VM:**
-- **Ubuntu 24.04 Server**
-- **NVIDIA GPU drivers** (auto-detected version)
-- **CUDA 12.8 Toolkit**
-- **PyTorch 2.7.0** with CUDA support
-- **Forge Neo WebUI** (Stable Diffusion)
-- **Python 3.10** virtual environment
-- **ML packages**: xformers, bitsandbytes, attention optimizations
-- **Default model**: FLUX1-dev-nf4-v2
-- **Systemd service** for auto-start
-
-### Standalone Deployment
-**On Ubuntu Desktop/Server:**
-- **Base system packages** (build tools, git, curl, etc.)
-- **NVIDIA drivers** (550+ from graphics-drivers PPA)
-- **CUDA Toolkit** (12.6+)
-- **cuDNN** for deep learning
-- **Conda/Miniforge** for environment management
-- **Stable Diffusion Forge** repository
-- **PyTorch with CUDA support** (cu121)
-- **ML dependencies** (gradio, transformers, accelerate, etc.)
-- **Conda environment** `forge-cuda` with Python 3.11
-- **Desktop shortcuts and aliases** (gpu, forge-launch, etc.)
-- **Launch scripts** for easy startup
-
-## Prerequisites
-
-### Hardware
-- CPU with IOMMU support (Intel VT-d or AMD-Vi)
-- NVIDIA GPU for passthrough (not your primary display GPU)
-- 24GB+ RAM (16GB for VM + 8GB for host)
-- 100GB+ free disk space
-
-### Software
-- Ubuntu 22.04 or 24.04 (host)
-- Sudo privileges
-- Internet connection
-
-## Setup Process
-
-### Phase 1: Host Preparation (~15-30 minutes)
-1. Enable IOMMU in BIOS
-2. Configure kernel parameters
-3. Set up VFIO for GPU isolation
-4. Reboot
-
-### Phase 2: VM Creation (~10 minutes)
-1. Run `scripts/setup-gpu-vm.sh` or `scripts/vm/create-vm.sh`
-2. Select GPU for passthrough
-3. Configure VM settings
-4. Start VM
-
-### Phase 3: Networking (~10 minutes)
-1. Configure dual networking:
-   - **NAT** (192.168.122.x) - host access
-   - **Macvtap** (192.168.1.x) - LAN access
-2. Update VM network config
-
-### Phase 4: Forge Neo Installation (~40 minutes)
-1. Set up Ansible inventory
-2. Run playbook
-3. Wait for installation (includes model download)
-
-See [SETUP-GPU-PASSTHROUGH.md](SETUP-GPU-PASSTHROUGH.md) for detailed instructions.
-
-## Usage
-
-### VM Management
-
-```bash
-# Start/stop VM
-virsh start forge-neo-gpu
-virsh shutdown forge-neo-gpu
-
-# Get VM IP addresses
-virsh domifaddr forge-neo-gpu
-
-# Connect to console
-virsh console forge-neo-gpu  # Ctrl+] to exit
-
-# SSH to VM
-ssh ubuntu@192.168.122.XX
-```
-
-### Forge Neo Management (in VM)
-
-```bash
-# Start/stop service
-sudo systemctl start forge-neo
-sudo systemctl stop forge-neo
-sudo systemctl restart forge-neo
-
-# View logs
-sudo journalctl -u forge-neo -f
-
-# Monitor GPU usage
-watch -n 1 nvidia-smi
-
-# Manual start
-cd ~/forge-neo/app
-source venv/bin/activate
-bash webui.sh
-```
-
-## Networking
-
-The VM has two network interfaces:
-
-| Interface | Type | IP Range | Purpose |
-|-----------|------|----------|---------|
-| enp1s0 | NAT | 192.168.122.x | Host access |
-| enp7s0 | Macvtap | 192.168.1.x | LAN access |
-
-**Access WebUI:**
-- From host: `http://192.168.122.XX:7860`
-- From LAN: `http://192.168.1.XX:7860`
-
-See [configure-dual-networking.md](configure-dual-networking.md) for details.
+---
 
 ## Troubleshooting
 
-### GPU not visible in VM
-
+### GPU not binding to VFIO
 ```bash
-# Check on host
-lspci -nnk -d 10de: | grep -A3 "Kernel driver"
-# Should show: vfio-pci
-
-# Check in VM
-lspci | grep -i nvidia
-nvidia-smi
+./host/diagnostic.sh  # Shows what's wrong
+dmesg | grep -i iommu  # Check IOMMU is enabled
+lspci -nnk -d 10de:  # Check current driver binding
 ```
 
-### NVIDIA drivers not working
+**Common fixes:**
+- Enable IOMMU in BIOS (Intel VT-d or AMD-Vi)
+- Add kernel parameters: `intel_iommu=on iommu=pt` (or `amd_iommu=on`)
+- Run `sudo ./host/system-config.sh` to configure VFIO
 
+### VM won't start
 ```bash
-# In VM
-ubuntu-drivers devices
+sudo journalctl -u libvirtd -n 50  # Check libvirt logs
+virsh list --all  # Check VM state
+```
+
+**Common fixes:**
+- GPU must be bound to vfio-pci on host
+- Check IOMMU groups: Run `./host/diagnostic.sh`
+- Try `./host/fixes/fix-vfio-permissions.sh`
+
+### NVIDIA drivers not working in VM/Standalone
+```bash
+# In VM or standalone system
+nvidia-smi  # Should show GPU
+ubuntu-drivers devices  # Shows available drivers
+```
+
+**Common fixes:**
+```bash
 sudo ubuntu-drivers autoinstall
 sudo reboot
 ```
 
-### Network issues
-
+### Forge WebUI issues
 ```bash
-# In VM
-ip addr show
-sudo netplan apply
-sudo ufw allow 7860/tcp
+# Check service status
+sudo systemctl status forge-neo  # VM
+sudo systemctl status forge-cuda  # Standalone
+
+# Check CUDA is available
+python -c "import torch; print(torch.cuda.is_available())"
+
+# Manual start
+cd ~/forge-neo/app  # or ~/llm/sd-webui-forge-cuda
+source venv/bin/activate
+bash webui.sh
 ```
 
-### VFIO/IOMMU issues
+📖 **More help:** See [docs/PASSTHROUGH-DETAILED.md](docs/PASSTHROUGH-DETAILED.md) for comprehensive troubleshooting
 
-```bash
-# Use fix scripts
-./scripts/fixes/fix-vfio-permissions.sh
-./scripts/fixes/fix-memlock-limits.sh
+---
+
+## Understanding This Repository
+
+### Execution Contexts
+
+**This repository has scripts that run in three different places.** Understanding where each script executes is critical:
+
+#### 🖥️ Host Scripts (`host/`)
+**Run on your hypervisor/host machine** to configure GPU passthrough and manage VMs.
+
+- **GPU Passthrough:** `diagnostic.sh`, `system-config.sh`, `toggle-passthrough.sh`, `rollback.sh`
+- **VM Management:** `setup-gpu-vm.sh`, `vm/create-vm.sh`, `vm/add-gpu-to-vm.sh`, `vm/hide-vm-detection.sh`
+- **Troubleshooting:** `fixes/fix-vfio-permissions.sh`, `fixes/fix-memlock-limits.sh`, `fixes/fix-dns.sh`, `fixes/fix-socat-service.sh`
+
+#### 💻 Guest Scripts (`guest/`)
+**Run inside the VM** after it's created (via SSH or console).
+
+- `configure-ubuntu-nat.sh` - Configure second network interface in VM
+
+#### 🚀 Standalone Scripts (`standalone/`)
+**Run on bare Ubuntu** (no VM, direct installation on physical/bare metal).
+
+- `quick-start.sh` - Interactive deployment wizard
+- `validate-config.sh` - Pre-flight configuration checks
+- `export-current-config.sh` - Export current system configuration
+
+#### 📦 Ansible Playbooks
+**Execution context specified in each playbook:**
+
+- `ansible/playbooks/site.yml` → **GUEST** (deploys to VM via SSH)
+- `ansible/playbooks/main-standalone.yml` → **STANDALONE** (deploys to localhost)
+- `ansible/backup.yml` → **STANDALONE**
+- `ansible/install-systemd-service.yml` → **STANDALONE**
+
+### Repository Structure
+
+```
+.
+├── host/                    # 🖥️  Scripts for hypervisor/host
+│   ├── diagnostic.sh       # GPU passthrough diagnostics
+│   ├── system-config.sh    # Configure VFIO passthrough
+│   ├── toggle-passthrough.sh  # Switch GPU between host/VMs
+│   ├── rollback.sh         # Remove passthrough config
+│   ├── setup-gpu-vm.sh     # Interactive VM setup wizard
+│   ├── vm/                 # VM creation and management
+│   └── fixes/              # Host-side troubleshooting
+│
+├── guest/                   # 💻 Scripts for inside VMs
+│   └── configure-ubuntu-nat.sh  # VM network configuration
+│
+├── standalone/              # 🚀 Scripts for bare Ubuntu
+│   ├── quick-start.sh      # Deployment wizard
+│   ├── validate-config.sh  # Pre-flight checks
+│   └── export-current-config.sh  # Export config
+│
+├── ansible/                 # 📦 Ansible automation
+│   ├── playbooks/
+│   │   ├── site.yml        # VM deployment (GUEST)
+│   │   └── main-standalone.yml  # Bare metal deployment
+│   ├── roles/              # Modular installation tasks
+│   │   ├── nvidia/         # NVIDIA drivers (for VMs)
+│   │   ├── nvidia-cuda/    # NVIDIA + CUDA (standalone)
+│   │   ├── forge-neo/      # Forge Neo (VMs)
+│   │   └── forge-cuda/     # Forge + CUDA (standalone)
+│   └── group_vars/         # Configuration variables
+│
+├── configs/                 # VM XML configurations
+├── docs/                    # Additional documentation
+└── README.md               # This file
 ```
 
-See [SETUP-GPU-PASSTHROUGH.md](SETUP-GPU-PASSTHROUGH.md) for complete troubleshooting guide.
+### What Gets Installed
 
-## Performance
+<details>
+<summary><b>Path A: GPU Passthrough Setup (Host)</b></summary>
 
-With proper GPU passthrough:
-- **95-100% of bare metal GPU performance**
-- Full VRAM access
-- CUDA acceleration
-- Fast inference times
+- VFIO kernel modules configuration
+- GRUB kernel parameters (IOMMU)
+- GPU isolation from host drivers
+- Toggle scripts for switching GPU modes
+- Diagnostic tools
+</details>
 
-## Documentation
+<details>
+<summary><b>Path B: VM Deployment</b></summary>
 
-### Main Documentation
-| File | Description |
-|------|-------------|
-| [README.md](README.md) | This file - overview and quick start |
-| [QUICKREF.md](QUICKREF.md) | Quick command reference |
+**On Host:**
+- QEMU/KVM virtualization
+- libvirt for VM management
+- VFIO drivers for GPU passthrough
 
-### GPU Passthrough
-| File | Description |
-|------|-------------|
-| [docs/PASSTHROUGH-QUICKSTART.md](docs/PASSTHROUGH-QUICKSTART.md) | Daily use quick reference |
-| [docs/PASSTHROUGH-IMPROVEMENTS.md](docs/PASSTHROUGH-IMPROVEMENTS.md) | Softdep method vs blacklisting |
-| [docs/PASSTHROUGH-DETAILED.md](docs/PASSTHROUGH-DETAILED.md) | Complete architecture and troubleshooting |
+**In VM:**
+- Ubuntu 24.04 Server (cloud-init automated)
+- NVIDIA drivers (auto-detected version)
+- CUDA 12.8 Toolkit
+- PyTorch 2.7.0 with CUDA support
+- Stable Diffusion WebUI Forge Neo
+- Python 3.10 virtual environment
+- ML packages: xformers, bitsandbytes, attention optimizations
+- FLUX1-dev-nf4-v2 model (~8GB)
+- Systemd service for auto-start
+- Dual networking (NAT + Macvtap)
+</details>
 
-### VM Deployment
-| File | Description |
-|------|-------------|
-| [SETUP-GPU-PASSTHROUGH.md](SETUP-GPU-PASSTHROUGH.md) | Complete VM setup guide |
-| [GPU-PASSTHROUGH-STANDALONE.md](GPU-PASSTHROUGH-STANDALONE.md) | Alternative passthrough guide |
-| [configure-dual-networking.md](configure-dual-networking.md) | Network setup details |
+<details>
+<summary><b>Path C: Standalone Deployment</b></summary>
+
+- Base system packages (build tools, git, etc.)
+- NVIDIA drivers (550+ from graphics-drivers PPA)
+- CUDA Toolkit (12.6+)
+- cuDNN for deep learning
+- Conda/Miniforge environment manager
+- Stable Diffusion Forge repository
+- PyTorch with CUDA support (cu121)
+- ML dependencies (gradio, transformers, accelerate, etc.)
+- Conda environment: `forge-cuda` with Python 3.11
+- Desktop shortcuts and bash aliases
+- Launch scripts (`forge-launch`, etc.)
+- Optional systemd service
+</details>
+
+---
 
 ## Key Features
 
 ### GPU Passthrough
-- ✅ **Production-tested** softdep method (industry standard)
-- ✅ **Toggle functionality** - Switch GPU between VMs and host
+- ✅ **Production-tested** softdep method (Arch Wiki standard)
+- ✅ **Toggle functionality** - Switch GPU between VMs and host without reinstalling
 - ✅ **Auto-detection** of GPU PCI addresses and device IDs
-- ✅ **Safe fallback** if VFIO fails to bind
-- ✅ **One-command setup** with comprehensive diagnostics
+- ✅ **Safe fallback** - NVIDIA drivers can still load if VFIO fails
+- ✅ **One-command diagnostics** - Verify setup at every stage
 - ✅ **Complete rollback** capability
 
 ### Automation & Deployment
-- ✅ **Multiple deployment modes** (VM-based, standalone)
-- ✅ **Ansible automation** for reproducible setups
-- ✅ **Interactive scripts** with validation and error checking
-- ✅ **Idempotent operations** - safe to run multiple times
-- ✅ **Pre-flight validation** - catch issues before deployment
+- ✅ **Three deployment paths** - VM, standalone, or just passthrough
+- ✅ **Ansible automation** - Reproducible, idempotent setups
+- ✅ **Interactive scripts** - Validation and error checking
+- ✅ **Pre-flight validation** - Catch issues before deployment
 
 ### VM Features
 - ✅ **95-100% bare metal GPU performance**
 - ✅ **Dual networking** (host + LAN access)
-- ✅ **Systemd service** for auto-start
-- ✅ **VM detection hiding** for better compatibility
+- ✅ **Systemd service** - Auto-start on boot
+- ✅ **VM detection hiding** - Better compatibility
 
 ### ML/AI Stack
 - ✅ **Latest NVIDIA drivers** and CUDA toolkit
-- ✅ **PyTorch with CUDA support**
+- ✅ **PyTorch with CUDA** support
 - ✅ **Stable Diffusion Forge** pre-configured
-- ✅ **Conda environment management**
-- ✅ **Desktop shortcuts and aliases**
+- ✅ **Conda environment** management
 
-### Documentation
-- ✅ **Comprehensive guides** for all scenarios
-- ✅ **Quick reference cards** for daily use
-- ✅ **Troubleshooting guides** with solutions
-- ✅ **Architecture documentation** for deep understanding
+---
 
-## Tested Configuration
+## Production-Tested Configuration
 
-**Production System:**
-- **CPU**: AMD Ryzen 9 9950X (16-Core, with AMD-Vi IOMMU)
-- **Host GPU**: AMD Radeon Graphics (Granite Ridge) - Used for host display
-- **Passthrough GPU**: NVIDIA GeForce RTX 5060 Ti (10de:2d04)
-- **OS**: Ubuntu 24.04 LTS
-- **Kernel**: 6.17.0-6-generic
-- **VM Guest**: Windows 11 and Ubuntu 24.04
+This automation has been tested and runs in production on:
 
-This configuration demonstrates:
-- ✅ AMD CPU with integrated graphics (iGPU provides host display)
-- ✅ NVIDIA discrete GPU passed through to VMs
-- ✅ Seamless switching between passthrough and host use
-- ✅ No display issues during mode changes
-- ✅ 95-100% bare metal GPU performance in VMs
+**Hardware:**
+- **CPU:** AMD Ryzen 9 9950X (16-Core, AMD-Vi IOMMU)
+- **Host GPU:** AMD Radeon Graphics (integrated, used for host display)
+- **Passthrough GPU:** NVIDIA GeForce RTX 5060 Ti (discrete, passed to VMs)
+- **RAM:** 64GB DDR5
+- **OS:** Ubuntu 24.04 LTS
+- **Kernel:** 6.17.0-6-generic
 
-## Time Estimates
+**VMs:**
+- Windows 11 (gaming, GPU passthrough)
+- Ubuntu 24.04 (Forge Neo, GPU passthrough)
 
-### GPU Passthrough Setup
-- Initial diagnostics: 5 minutes
-- Passthrough configuration: 10 minutes
-- Reboot and verification: 5 minutes
-- **Total: ~20 minutes**
+**Performance:**
+- 95-100% bare metal GPU performance in VMs
+- Seamless GPU switching between host and VMs
+- No display issues during mode changes
+- Full VRAM access in passthrough mode
 
-### VM Deployment
-- Host preparation: 15-30 minutes
-- VM creation: 5-10 minutes
-- Networking setup: 5-10 minutes
-- Ansible playbook: 30-45 minutes
-- **Total: ~1-2 hours** (mostly automated)
-
-### Standalone Deployment
-- Configuration review: 5-10 minutes
-- Interactive deployment: 30-45 minutes
-- Reboot and verification: 5 minutes
-- **Total: ~45-60 minutes**
-
-## Support & Troubleshooting
-
-### GPU Passthrough Issues (HOST)
-1. Run diagnostics: `./host/diagnostic.sh`
-2. Check configuration: `cat /etc/modprobe.d/vfio.conf`
-3. Verify IOMMU: `dmesg | grep -i iommu`
-4. See [docs/PASSTHROUGH-DETAILED.md](docs/PASSTHROUGH-DETAILED.md)
-
-### VM Issues (HOST)
-1. Check [SETUP-GPU-PASSTHROUGH.md](SETUP-GPU-PASSTHROUGH.md) troubleshooting section
-2. Run fix scripts in `host/fixes/` directory
-3. Check VM logs: `sudo journalctl -u libvirtd`
-4. Check Forge Neo logs (in GUEST): `sudo journalctl -u forge-neo`
-
-### Standalone Deployment Issues (STANDALONE)
-1. Run validation: `./standalone/validate-config.sh`
-2. Check Ansible logs from deployment
-3. Verify NVIDIA drivers: `nvidia-smi`
-4. Verify CUDA: `nvcc --version`
-5. Test PyTorch: `python -c "import torch; print(torch.cuda.is_available())"`
-
-### Common Issues
-- **GPU not binding to VFIO** (HOST): Run `./host/diagnostic.sh` and check IOMMU is enabled
-- **NVIDIA drivers not loading in VM** (GUEST): Check `ubuntu-drivers devices` and reinstall if needed
-- **Conda environment not found** (STANDALONE/GUEST): Restart shell or run `source ~/.bashrc`
-- **Forge launch fails** (STANDALONE/GUEST): Activate conda env first: `conda activate forge-cuda`
+---
 
 ## Additional Resources
 
 ### Official Documentation
-- [Arch Wiki - GPU Passthrough](https://wiki.archlinux.org/title/PCI_passthrough_via_OVMF)
+- [Arch Wiki - GPU Passthrough](https://wiki.archlinux.org/title/PCI_passthrough_via_OVMF) (industry standard reference)
 - [NVIDIA CUDA Documentation](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/)
 - [PyTorch Installation Guide](https://pytorch.org/get-started/locally/)
-- [Ansible Documentation](https://docs.ansible.com/)
+- [KVM/QEMU Documentation](https://www.linux-kvm.org/)
 
 ### Related Projects
 - [Stable Diffusion WebUI Forge](https://github.com/lllyasviel/stable-diffusion-webui-forge)
 - [Forge Neo](https://github.com/Haoming02/sd-webui-forge-classic/tree/neo)
-- [KVM/QEMU Documentation](https://www.linux-kvm.org/)
 - [Libvirt Networking](https://wiki.libvirt.org/page/Networking)
 
 ### Inspiration & Credits
 - [k-amin07's VFIO Guide](https://gist.github.com/k-amin07/47cb06e4598e0c81f2b42904c6909329)
 - [k-amin07's VFIO Switcher](https://github.com/k-amin07/VFIO-Switcher)
 
+---
+
 ## Contributing
 
-Contributions welcome! This setup has been tested on AMD systems with NVIDIA GPUs. If you test on:
+Contributions welcome! This setup has been tested on AMD systems with NVIDIA GPUs.
+
+**Seeking testers for:**
 - Intel systems with NVIDIA GPUs
 - Different GPU models (RTX 20xx, 30xx, 40xx series)
 - Different Linux distributions
 
 Please share your experience via issues or pull requests.
+
+---
 
 ## License
 
@@ -546,10 +469,15 @@ MIT License - See individual component licenses for details.
 
 This repository contains automation scripts and configurations. Individual components (QEMU, libvirt, NVIDIA drivers, Stable Diffusion Forge, etc.) maintain their respective licenses.
 
+---
+
 ## Disclaimer
 
 GPU passthrough involves modifying system configuration. While this setup includes safety features, backups, and rollback capabilities:
-- Always have a backup plan for system access (SSH, serial console, recovery mode)
-- Test in a non-production environment first if possible
-- Understand the changes being made to your system
-- Use at your own risk
+
+- ⚠️ Always have a backup plan for system access (SSH, serial console, recovery mode)
+- ⚠️ Test in a non-production environment first if possible
+- ⚠️ Understand the changes being made to your system
+- ⚠️ Use at your own risk
+
+**Support:** For issues, see troubleshooting section above or consult the detailed guides in `docs/`.
