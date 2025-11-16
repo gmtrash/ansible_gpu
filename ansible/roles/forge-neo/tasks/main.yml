@@ -101,34 +101,9 @@
     msg: "Forge Neo will install additional requirements on first launch"
   when: not webui_script.stat.exists
 
-- name: Install huggingface-cli
-  ansible.builtin.pip:
-    name: huggingface_hub[cli]
-    virtualenv: "{{ forge_install_dir }}/app/venv"
-
-- name: Check if huggingface-cli was installed
-  ansible.builtin.stat:
-    path: "{{ forge_install_dir }}/app/venv/bin/huggingface-cli"
-  register: hf_cli
-
-- name: Download default model (FLUX1-dev-nf4-v2) if requested
-  ansible.builtin.shell: |
-    {{ forge_install_dir }}/app/venv/bin/huggingface-cli download lllyasviel/flux1-dev-bnb-nf4 \
-      flux1-dev-bnb-nf4-v2.safetensors \
-      --local-dir {{ forge_install_dir }}/app/models/Stable-diffusion
-  args:
-    chdir: "{{ forge_install_dir }}/app"
-    executable: /bin/bash
-  when:
-    - forge_download_default_model | default(true)
-    - hf_cli.stat.exists
-  timeout: 3600
-  ignore_errors: yes
-
-- name: Note about manual model download
+- name: Note about model downloads
   ansible.builtin.debug:
-    msg: "Model download skipped. You can download models manually from https://huggingface.co/lllyasviel/flux1-dev-bnb-nf4"
-  when: not hf_cli.stat.exists or not (forge_download_default_model | default(true))
+    msg: "Models can be downloaded through the Forge Neo web interface at http://{{ ansible_default_ipv4.address }}:7860"
 
 - name: Create systemd service for Forge Neo
   ansible.builtin.template:
