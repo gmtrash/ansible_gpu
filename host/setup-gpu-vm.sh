@@ -98,8 +98,10 @@ fi
 # Phase 2: Check IOMMU
 print_step "Phase 2: Checking IOMMU Status"
 
-if dmesg | grep -qi "iommu.*enabled"; then
-    print_success "IOMMU is enabled"
+# Check if IOMMU groups exist (non-root method)
+if [ -d /sys/kernel/iommu_groups ] && [ -n "$(ls -A /sys/kernel/iommu_groups 2>/dev/null)" ]; then
+    IOMMU_GROUP_COUNT=$(ls /sys/kernel/iommu_groups/ | wc -l)
+    print_success "IOMMU is enabled ($IOMMU_GROUP_COUNT IOMMU groups found)"
 else
     print_error "IOMMU not enabled in kernel"
     echo ""
