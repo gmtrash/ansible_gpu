@@ -1,0 +1,229 @@
+---
+# NVIDIA Driver and CUDA installation and configuration
+
+- name: Check if NVIDIA driver is already installed
+  command: nvidia-smi
+  register: nvidia_check
+  failed_when: false
+  changed_when: false
+  tags: nvidia
+
+- name: Display NVIDIA driver status
+  debug:
+    msg: "NVIDIA driver is already installed: {{ nvidia_check.stdout_lines[0] }}"
+  when: nvidia_check.rc == 0
+  tags: nvidia
+
+- name: Detect Ubuntu codename
+  command: lsb_release -cs
+  register: ubuntu_codename
+  changed_when: false
+  tags: nvidia
+
+- name: Add NVIDIA driver PPA
+  apt_repository:
+    repo: ppa:graphics-drivers/ppa
+    state: present
+    update_cache: yes
+  when: nvidia_check.rc != 0 and use_ppa_drivers | default(true)
+  tags: nvidia
+
+- name: Install NVIDIA driver (latest from PPA)
+  apt:
+    name:
+      - nvidia-driver-{{ nvidia_driver_version }}
+      - nvidia-utils-{{ nvidia_driver_version }}
+      - nvidia-settings
+    state: present
+    update_cache: yes
+  when: nvidia_check.rc != 0 and nvidia_driver_version is defined
+  tags: nvidia
+
+- name: Install NVIDIA driver (auto-detect latest)
+  apt:
+    name:
+      - nvidia-driver-550
+      - nvidia-utils-550
+      - nvidia-settings
+    state: present
+    update_cache: yes
+  when: nvidia_check.rc != 0 and nvidia_driver_version is not defined
+  tags: nvidia
+
+- name: Check if CUDA is already installed
+  stat:
+    path: /usr/local/cuda
+  register: cuda_check
+  tags: nvidia
+
+- name: Display CUDA status
+  debug:
+    msg: "CUDA is already installed at /usr/local/cuda"
+  when: cuda_check.stat.exists
+  tags: nvidia
+
+- name: Download CUDA keyring package
+  get_url:
+    url: "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu{{ ubuntu_codename.stdout | regex_replace('[^0-9]', '') }}/x86_64/cuda-keyring_1.1-1_all.deb"
+    dest: /tmp/cuda-keyring.deb
+    mode: '0644'
+  when: not cuda_check.stat.exists and install_cuda | default(true)
+  tags: nvidia
+
+- name: Install CUDA keyring
+  apt:
+    deb: /tmp/cuda-keyring.deb
+    state: present
+  when: not cuda_check.stat.exists and install_cuda | default(true)
+  tags: nvidia
+
+- name: Update apt cache after adding CUDA repo
+  apt:
+    update_cache: yes
+  when: not cuda_check.stat.exists and install_cuda | default(true)
+  tags: nvidia
+
+- name: Install CUDA toolkit
+  apt:
+    name:
+      - cuda-toolkit-{{ cuda_version | replace('.', '-') }}
+      - cuda-drivers
+    state: present
+  when: not cuda_check.stat.exists and install_cuda | default(true) and cuda_version is defined
+  tags: nvidia
+
+- name: Install CUDA toolkit (latest)
+  apt:
+    name:
+      - cuda-toolkit-12-6
+      - cuda-drivers
+    state: present
+  when: not cuda_check.stat.exists and install_cuda | default(true) and cuda_version is not defined
+  tags: nvidia
+
+- name: Install cuDNN (optional)
+  apt:
+    name:
+      - libcudnn9-cuda-12
+      - libcudnn9-dev-cuda-12
+    state: present
+  when: install_cudnn | default(true)
+  tags: nvidia
+
+- name: Clean up CUDA keyring package
+  file:
+    path: /tmp/cuda-keyring.deb
+    state: absent
+  tags: nvidia
+
+- name: Add CUDA to PATH in /etc/environment
+  lineinfile:
+    path: /etc/environment
+    regexp: '^PATH='
+    line: 'PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/cuda/bin"'
+    state: present
+  tags: nvidia
+
+- name: Set CUDA environment variables in /etc/profile.d
+  copy:
+    dest: /etc/profile.d/cuda.sh
+    content: |
+      # CUDA environment variables
+      export PATH="/usr/local/cuda/bin:$PATH"
+      export LD_LIBRARY_PATH="/usr/local/cuda/lib64:$LD_LIBRARY_PATH"
+      export CUDA_HOME=/usr/local/cuda
+      export CUDA_PATH=/usr/local/cuda
+      {% if cuda_compute_capability is defined %}
+      export TORCH_CUDA_ARCH_LIST="{{ cuda_compute_capability }}"
+      {% endif %}
+    mode: '0644'
+  tags: nvidia
+
+- name: Ensure user is in video group (for GPU access)
+  user:
+    name: "{{ username }}"
+    groups: video
+    append: yes
+  tags: nvidia
+
+- name: Create modprobe configuration for NVIDIA
+  copy:
+    dest: /etc/modprobe.d/nvidia.conf
+    content: |
+      # NVIDIA driver options
+      options nvidia NVreg_PreserveVideoMemoryAllocations=1
+      options nvidia NVreg_TemporaryFilePath=/tmp
+    mode: '0644'
+  tags: nvidia
+
+- name: Verify NVIDIA driver installation
+  command: nvidia-smi
+  register: nvidia_verify
+  changed_when: false
+  failed_when: false
+  tags: nvidia
+
+- name: Display NVIDIA driver info
+  debug:
+    msg: "{{ nvidia_verify.stdout_lines }}"
+  when: nvidia_verify.rc == 0
+  tags: nvidia
+
+- name: Warn if NVIDIA driver not detected (reboot may be required)
+  debug:
+    msg:
+      - "WARNING: NVIDIA driver not detected via nvidia-smi"
+      - "This is normal if this is a fresh installation"
+      - "A REBOOT IS REQUIRED for the driver to load"
+  when: nvidia_verify.rc != 0
+  tags: nvidia
+
+- name: Detect GPU compute capability
+  shell: nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -1
+  register: detected_compute_cap
+  changed_when: false
+  failed_when: false
+  tags: nvidia
+
+- name: Set GPU compute capability fact
+  set_fact:
+    gpu_compute_cap: "{{ cuda_compute_capability | default(detected_compute_cap.stdout | default('8.9')) }}"
+  tags: nvidia
+
+- name: Display GPU compute capability
+  debug:
+    msg: "GPU Compute Capability: {{ gpu_compute_cap }}"
+  when: detected_compute_cap.rc == 0
+  tags: nvidia
+
+- name: Create NVIDIA info file for user reference
+  copy:
+    dest: "{{ home_dir }}/.nvidia-info"
+    content: |
+      # NVIDIA/CUDA Configuration
+      # Generated by Ansible on {{ ansible_date_time.iso8601 }}
+
+      GPU: NVIDIA RTX 5060 Ti
+      {% if nvidia_driver_version is defined %}
+      Driver Version: {{ nvidia_driver_version }}
+      {% endif %}
+      {% if cuda_version is defined %}
+      CUDA Version: {{ cuda_version }}
+      {% endif %}
+      {% if gpu_compute_cap is defined %}
+      Compute Capability: {{ gpu_compute_cap }}
+      {% endif %}
+
+      # Verify installation:
+      # nvidia-smi
+      # nvcc --version
+
+      # Monitor GPU:
+      # watch -n 1 nvidia-smi
+
+      # Check CUDA in Python:
+      # python -c "import torch; print(torch.cuda.is_available())"
+    owner: "{{ username }}"
+    group: "{{ user_group }}"
+    mode: '0644'
+  tags: nvidia

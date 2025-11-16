@@ -1,0 +1,70 @@
+---
+# Main playbook for Ubuntu Desktop + SD Forge CUDA setup
+# Usage: ansible-playbook main.yml
+# Dry run: ansible-playbook main.yml --check
+# Specific tags: ansible-playbook main.yml --tags "nvidia,forge"
+
+- name: Configure Ubuntu Desktop with SD Forge CUDA
+  hosts: localhost
+  connection: local
+  become: yes
+  vars_files:
+    - group_vars/localhost.yml
+
+  tasks:
+    - name: Display configuration
+      debug:
+        msg:
+          - "Configuring system for user: {{ username }}"
+          - "Forge install directory: {{ forge_install_dir }}"
+          - "NVIDIA driver version: {{ nvidia_driver_version | default('auto-detect') }}"
+          - "CUDA version: {{ cuda_version | default('12.6') }}"
+      tags: always
+
+    - name: Import base system role
+      import_role:
+        name: base-system
+      tags: base
+
+    - name: Import NVIDIA/CUDA role
+      import_role:
+        name: nvidia-cuda
+      tags: nvidia
+
+    - name: Import conda role
+      import_role:
+        name: conda
+      tags: conda
+
+    - name: Import SD Forge CUDA role
+      import_role:
+        name: forge-cuda
+      tags: forge
+
+    - name: Import desktop preferences role
+      import_role:
+        name: desktop-preferences
+      tags: desktop
+      when: configure_desktop | default(true)
+
+    - name: Final summary
+      debug:
+        msg:
+          - "===================="
+          - "Setup complete!"
+          - "===================="
+          - ""
+          - "IMPORTANT: REBOOT REQUIRED for NVIDIA driver to load!"
+          - ""
+          - "After reboot:"
+          - "1. Verify NVIDIA: nvidia-smi"
+          - "2. Verify CUDA: nvcc --version"
+          - "3. Activate conda: conda activate {{ forge_conda_env }}"
+          - "4. Launch Forge: cd {{ forge_install_dir }} && ./launch-cuda.sh"
+          - "5. Access WebUI at: http://localhost:7860"
+          - ""
+          - "Helpful aliases (already configured in ~/.bashrc):"
+          - "  - gpu: show GPU status (nvidia-smi)"
+          - "  - forge: navigate to Forge directory and activate conda env"
+          - "  - forge-launch: launch Forge WebUI"
+      tags: always

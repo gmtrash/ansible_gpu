@@ -1,0 +1,237 @@
+---
+# Stable Diffusion WebUI Forge - CUDA setup
+
+- name: Ensure parent directory exists
+  file:
+    path: "{{ forge_install_dir | dirname }}"
+    state: directory
+    owner: "{{ username }}"
+    group: "{{ user_group }}"
+    mode: '0755'
+  tags: forge
+
+- name: Check if Forge repository exists
+  stat:
+    path: "{{ forge_install_dir }}/.git"
+  register: forge_repo_exists
+  become_user: "{{ username }}"
+  tags: forge
+
+- name: Clone Forge repository
+  git:
+    repo: "{{ forge_repo_url }}"
+    dest: "{{ forge_install_dir }}"
+    version: "{{ forge_branch }}"
+    update: yes
+  become_user: "{{ username }}"
+  when: not forge_repo_exists.stat.exists
+  tags: forge
+
+- name: Update Forge repository
+  git:
+    repo: "{{ forge_repo_url }}"
+    dest: "{{ forge_install_dir }}"
+    version: "{{ forge_branch }}"
+    update: yes
+  become_user: "{{ username }}"
+  when: forge_repo_exists.stat.exists
+  tags: forge
+
+- name: Check if forge conda environment exists
+  shell: "{{ conda_install_dir }}/bin/conda env list | grep -q '^{{ forge_conda_env }} '"
+  register: forge_env_exists
+  failed_when: false
+  changed_when: false
+  become_user: "{{ username }}"
+  tags: forge
+
+- name: Create forge conda environment with Python
+  shell: "{{ conda_install_dir }}/bin/conda create -n {{ forge_conda_env }} python={{ forge_python_version }} -y"
+  become_user: "{{ username }}"
+  when: forge_env_exists.rc != 0
+  tags: forge
+
+- name: Install PyTorch with CUDA support in forge environment
+  shell: |
+    source {{ conda_install_dir }}/etc/profile.d/conda.sh
+    conda activate {{ forge_conda_env }}
+    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+  become_user: "{{ username }}"
+  args:
+    executable: /bin/bash
+  when: forge_env_exists.rc != 0
+  tags: forge
+
+- name: Install additional Python packages for Forge
+  shell: |
+    source {{ conda_install_dir }}/etc/profile.d/conda.sh
+    conda activate {{ forge_conda_env }}
+    pip install gradio pillow opencv-python numpy scipy accelerate safetensors transformers
+  become_user: "{{ username }}"
+  args:
+    executable: /bin/bash
+  when: forge_env_exists.rc != 0
+  tags: forge
+
+- name: Create webui-user.sh launch script
+  copy:
+    dest: "{{ forge_install_dir }}/webui-user.sh"
+    content: |
+      #!/bin/bash
+      # Forge WebUI launch script for CUDA
+
+      # Command-line arguments
+      export COMMANDLINE_ARGS="{{ forge_commandline_args }}"
+
+      # Python executable from conda environment
+      export python_cmd="{{ conda_install_dir }}/envs/{{ forge_conda_env }}/bin/python"
+
+      # Disable auto-venv (we're using conda)
+      export LAUNCH_SCRIPT="{{ forge_install_dir }}/launch.py"
+    owner: "{{ username }}"
+    group: "{{ user_group }}"
+    mode: '0755'
+  tags: forge
+
+- name: Create custom launch script with conda activation
+  copy:
+    dest: "{{ forge_install_dir }}/launch-cuda.sh"
+    content: |
+      #!/bin/bash
+      # Auto-generated launch script with conda activation
+
+      # Source conda
+      source "{{ conda_install_dir }}/etc/profile.d/conda.sh"
+
+      # Activate environment
+      conda activate {{ forge_conda_env }}
+
+      # Source CUDA environment
+      if [ -f /etc/profile.d/cuda.sh ]; then
+          source /etc/profile.d/cuda.sh
+      fi
+
+      # Launch WebUI
+      cd {{ forge_install_dir }}
+      exec bash webui.sh "$@"
+    owner: "{{ username }}"
+    group: "{{ user_group }}"
+    mode: '0755'
+  tags: forge
+
+- name: Create model directories
+  file:
+    path: "{{ forge_models_dir }}/{{ item }}"
+    state: directory
+    owner: "{{ username }}"
+    group: "{{ user_group }}"
+    mode: '0755'
+  loop:
+    - Stable-diffusion
+    - Lora
+    - VAE
+    - ControlNet
+    - ControlNetPreprocessor
+    - ESRGAN
+    - embeddings
+  tags: forge
+
+- name: Create symlinks to shared model directory
+  file:
+    src: "{{ shared_models_dir }}/{{ item }}"
+    dest: "{{ forge_models_dir }}/{{ item }}"
+    state: link
+    owner: "{{ username }}"
+    group: "{{ user_group }}"
+  loop: "{{ shared_models_types }}"
+  when: shared_models_dir is defined and shared_models_types is defined
+  tags: forge
+
+- name: Create desktop launcher (optional)
+  copy:
+    dest: "{{ home_dir }}/.local/share/applications/forge-cuda.desktop"
+    content: |
+      [Desktop Entry]
+      Version=1.0
+      Type=Application
+      Name=Stable Diffusion Forge (CUDA)
+      Comment=Launch Stable Diffusion WebUI Forge with CUDA
+      Exec={{ forge_install_dir }}/launch-cuda.sh
+      Icon=applications-graphics
+      Terminal=true
+      Categories=Graphics;
+    owner: "{{ username }}"
+    group: "{{ user_group }}"
+    mode: '0644'
+  when: configure_desktop | default(true)
+  tags: forge
+
+- name: Verify PyTorch CUDA in forge environment
+  shell: |
+    source {{ conda_install_dir }}/etc/profile.d/conda.sh
+    conda activate {{ forge_conda_env }}
+    python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}'); print(f'CUDA version: {torch.version.cuda if torch.cuda.is_available() else \"N/A\"}')"
+  register: pytorch_verify
+  changed_when: false
+  failed_when: false
+  become_user: "{{ username }}"
+  args:
+    executable: /bin/bash
+  tags: forge
+
+- name: Display PyTorch verification
+  debug:
+    msg: "{{ pytorch_verify.stdout_lines }}"
+  when: pytorch_verify.rc == 0
+  tags: forge
+
+- name: Warn if PyTorch CUDA verification failed
+  debug:
+    msg:
+      - "WARNING: PyTorch CUDA verification failed"
+      - "This may be normal if NVIDIA driver installation requires a reboot"
+      - "Reboot and run verification again"
+  when: pytorch_verify.rc != 0
+  tags: forge
+
+- name: Create Forge information file
+  copy:
+    dest: "{{ home_dir }}/.forge-cuda-info"
+    content: |
+      # Stable Diffusion WebUI Forge - CUDA Edition
+      # Generated by Ansible on {{ ansible_date_time.iso8601 }}
+
+      Installation Directory: {{ forge_install_dir }}
+      Conda Environment: {{ forge_conda_env }}
+      Model Directory: {{ forge_models_dir }}
+      {% if shared_models_dir is defined %}
+      Shared Models: {{ shared_models_dir }}
+      {% endif %}
+
+      ## Quick Start
+
+      # Activate environment:
+      conda activate {{ forge_conda_env }}
+
+      # Launch WebUI:
+      {{ forge_install_dir }}/launch-cuda.sh
+
+      # Or navigate and launch:
+      cd {{ forge_install_dir }}
+      bash webui.sh
+
+      ## Access WebUI
+      http://localhost:7860
+
+      ## Troubleshooting
+      - Check NVIDIA: nvidia-smi
+      - Check CUDA: nvcc --version
+      - Check PyTorch: python -c "import torch; print(torch.cuda.is_available())"
+      - See Forge documentation for more help
+
+      ## Performance Tips
+      - Command-line args: {{ forge_commandline_args }}
+    owner: "{{ username }}"
+    group: "{{ user_group }}"
+    mode: '0644'
+  tags: forge

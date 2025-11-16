@@ -1,0 +1,106 @@
+---
+# Conda/Miniforge installation and configuration
+
+- name: Check if conda is already installed
+  stat:
+    path: "{{ conda_install_dir }}/bin/conda"
+  register: conda_exists
+  become_user: "{{ username }}"
+  tags: conda
+
+- name: Display conda status
+  debug:
+    msg: "Conda is already installed at {{ conda_install_dir }}"
+  when: conda_exists.stat.exists
+  tags: conda
+
+- name: Download Miniforge installer
+  get_url:
+    url: "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh"
+    dest: "/tmp/miniforge-installer.sh"
+    mode: '0755'
+  when: not conda_exists.stat.exists and conda_installer == "miniforge"
+  become_user: "{{ username }}"
+  tags: conda
+
+- name: Download Miniconda installer
+  get_url:
+    url: "https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh"
+    dest: "/tmp/miniconda-installer.sh"
+    mode: '0755'
+  when: not conda_exists.stat.exists and conda_installer == "miniconda"
+  become_user: "{{ username }}"
+  tags: conda
+
+- name: Install Miniforge
+  command: "/tmp/miniforge-installer.sh -b -p {{ conda_install_dir }}"
+  when: not conda_exists.stat.exists and conda_installer == "miniforge"
+  become_user: "{{ username }}"
+  tags: conda
+
+- name: Install Miniconda
+  command: "/tmp/miniconda-installer.sh -b -p {{ conda_install_dir }}"
+  when: not conda_exists.stat.exists and conda_installer == "miniconda"
+  become_user: "{{ username }}"
+  tags: conda
+
+- name: Clean up conda installer
+  file:
+    path: "/tmp/{{ conda_installer }}-installer.sh"
+    state: absent
+  tags: conda
+
+- name: Initialize conda for bash
+  shell: "{{ conda_install_dir }}/bin/conda init bash"
+  become_user: "{{ username }}"
+  args:
+    creates: "{{ home_dir }}/.bashrc"
+  tags: conda
+
+- name: Configure conda to not activate base by default
+  shell: "{{ conda_install_dir }}/bin/conda config --set auto_activate_base false"
+  become_user: "{{ username }}"
+  when: not (conda_auto_activate_base | default(false))
+  tags: conda
+
+- name: Update conda to latest version
+  shell: "{{ conda_install_dir }}/bin/conda update -n base -c defaults conda -y"
+  become_user: "{{ username }}"
+  when: conda_version == "latest"
+  tags: conda
+
+- name: Verify conda installation
+  command: "{{ conda_install_dir }}/bin/conda --version"
+  register: conda_version_output
+  changed_when: false
+  become_user: "{{ username }}"
+  tags: conda
+
+- name: Display conda version
+  debug:
+    msg: "Installed conda version: {{ conda_version_output.stdout }}"
+  tags: conda
+
+- name: Add conda to PATH in user's .bashrc (if not already present)
+  lineinfile:
+    path: "{{ home_dir }}/.bashrc"
+    line: '# >>> conda initialize >>>'
+    state: present
+  check_mode: yes
+  register: conda_in_bashrc
+  become_user: "{{ username }}"
+  tags: conda
+
+- name: Source conda in current bashrc if not initialized
+  blockinfile:
+    path: "{{ home_dir }}/.bashrc"
+    marker: "# {mark} ANSIBLE MANAGED CONDA BLOCK"
+    block: |
+      # Initialize conda
+      if [ -f "{{ conda_install_dir }}/etc/profile.d/conda.sh" ]; then
+          . "{{ conda_install_dir }}/etc/profile.d/conda.sh"
+      fi
+    create: yes
+  when: conda_in_bashrc is changed
+  become_user: "{{ username }}"
+  tags: conda

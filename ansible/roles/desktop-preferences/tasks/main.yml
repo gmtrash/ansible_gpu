@@ -1,0 +1,196 @@
+---
+# Desktop preferences and user customizations
+
+- name: Configure git user name
+  git_config:
+    name: user.name
+    value: "{{ git_user_name }}"
+    scope: global
+  become_user: "{{ username }}"
+  when: git_user_name is defined
+  tags: desktop
+
+- name: Configure git user email
+  git_config:
+    name: user.email
+    value: "{{ git_user_email }}"
+    scope: global
+  become_user: "{{ username }}"
+  when: git_user_email is defined
+  tags: desktop
+
+- name: Configure git default branch
+  git_config:
+    name: init.defaultBranch
+    value: main
+    scope: global
+  become_user: "{{ username }}"
+  tags: desktop
+
+- name: Add custom bash aliases
+  blockinfile:
+    path: "{{ home_dir }}/.bashrc"
+    marker: "# {mark} ANSIBLE MANAGED ALIASES"
+    block: |
+      # Custom aliases
+      {% for alias in custom_bash_aliases %}
+      {{ alias }}
+      {% endfor %}
+    create: yes
+    owner: "{{ username }}"
+    group: "{{ user_group }}"
+  when: custom_bash_aliases is defined
+  tags: desktop
+
+- name: Add custom bash exports
+  blockinfile:
+    path: "{{ home_dir }}/.bashrc"
+    marker: "# {mark} ANSIBLE MANAGED EXPORTS"
+    block: |
+      # Custom exports
+      {% for export in custom_bash_exports %}
+      {{ export }}
+      {% endfor %}
+    create: yes
+    owner: "{{ username }}"
+    group: "{{ user_group }}"
+  when: custom_bash_exports is defined
+  tags: desktop
+
+- name: Add NVIDIA/CUDA and Forge shortcuts to bashrc
+  blockinfile:
+    path: "{{ home_dir }}/.bashrc"
+    marker: "# {mark} ANSIBLE MANAGED AI/ML SHORTCUTS"
+    block: |
+      # AI/ML Development shortcuts
+
+      # Quick NVIDIA GPU status check
+      alias nvidia-check='nvidia-smi'
+
+      # Quick PyTorch CUDA verification
+      alias torch-check='python -c "import torch; print(f\"PyTorch {torch.__version__}\"); print(f\"CUDA available: {torch.cuda.is_available()}\"); print(f\"CUDA version: {torch.version.cuda if torch.cuda.is_available() else \"N/A\"}\"); print(f\"Device: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"N/A\"}\")"'
+
+      # Conda environment info
+      alias conda-info='conda info --envs'
+    create: yes
+    owner: "{{ username }}"
+    group: "{{ user_group }}"
+  tags: desktop
+
+- name: Create vim configuration
+  copy:
+    dest: "{{ home_dir }}/.vimrc"
+    content: |
+      " Basic vim configuration
+      set number
+      set relativenumber
+      set autoindent
+      set tabstop=4
+      set shiftwidth=4
+      set expandtab
+      set smarttab
+      syntax on
+      set mouse=a
+      set hlsearch
+      set incsearch
+      set ignorecase
+      set smartcase
+      colorscheme desert
+    owner: "{{ username }}"
+    group: "{{ user_group }}"
+    mode: '0644'
+  when: configure_vim | default(true)
+  tags: desktop
+
+- name: Create tmux configuration
+  copy:
+    dest: "{{ home_dir }}/.tmux.conf"
+    content: |
+      # Basic tmux configuration
+      set -g default-terminal "screen-256color"
+      set -g mouse on
+      set -g history-limit 10000
+
+      # Easier prefix
+      unbind C-b
+      set -g prefix C-a
+      bind C-a send-prefix
+
+      # Easy split pane commands
+      bind | split-window -h
+      bind - split-window -v
+      unbind '"'
+      unbind %
+
+      # Easy reload
+      bind r source-file ~/.tmux.conf
+    owner: "{{ username }}"
+    group: "{{ user_group }}"
+    mode: '0644'
+  when: configure_tmux | default(true)
+  tags: desktop
+
+- name: Create useful bin scripts directory
+  file:
+    path: "{{ home_dir }}/bin"
+    state: directory
+    owner: "{{ username }}"
+    group: "{{ user_group }}"
+    mode: '0755'
+  tags: desktop
+
+- name: Create GPU monitor script
+  copy:
+    dest: "{{ home_dir }}/bin/gpu-monitor"
+    content: |
+      #!/bin/bash
+      # GPU monitoring script for NVIDIA
+      watch -n 1 'nvidia-smi'
+    owner: "{{ username }}"
+    group: "{{ user_group }}"
+    mode: '0755'
+  tags: desktop
+
+- name: Add ~/bin to PATH if not already present
+  lineinfile:
+    path: "{{ home_dir }}/.bashrc"
+    line: 'export PATH="$HOME/bin:$PATH"'
+    state: present
+    insertafter: EOF
+  become_user: "{{ username }}"
+  tags: desktop
+
+- name: Create backup directory
+  file:
+    path: "{{ backup_dir }}"
+    state: directory
+    owner: "{{ username }}"
+    group: "{{ user_group }}"
+    mode: '0755'
+  when: create_backup_before_changes | default(true)
+  tags: desktop
+
+- name: Create ansible deployment log
+  copy:
+    dest: "{{ home_dir }}/.ansible-deployment-log"
+    content: |
+      # Ansible Deployment Log
+      Last deployment: {{ ansible_date_time.iso8601 }}
+      Deployed by: Ansible
+      Hostname: {{ ansible_hostname }}
+      OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+
+      Installed components:
+      - Base system packages
+      - NVIDIA driver {{ nvidia_driver_version | default('auto') }}
+      - CUDA toolkit {{ cuda_version | default('12.6') }}
+      - Conda ({{ conda_installer }})
+      - SD Forge CUDA at {{ forge_install_dir }}
+
+      To redeploy or update:
+      cd /path/to/forge-neo
+      ansible-playbook main.yml
+    owner: "{{ username }}"
+    group: "{{ user_group }}"
+    mode: '0644'
+  tags: desktop

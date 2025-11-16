@@ -1,0 +1,153 @@
+---
+# Configuration variables for Ansible deployment
+# Edit these to match your preferences
+
+# ============================================
+# User Configuration
+# ============================================
+username: aubreybailey
+home_dir: "/home/{{ username }}"
+user_group: "{{ username }}"
+
+# ============================================
+# NVIDIA/CUDA Configuration
+# ============================================
+
+# NVIDIA driver version (leave undefined for auto-detection)
+# Example: 550, 560, etc.
+nvidia_driver_version: 550
+
+# Use PPA for latest drivers
+use_ppa_drivers: true
+
+# CUDA toolkit version (e.g., "12.6")
+# Leave undefined for latest (12.6)
+cuda_version: "12.6"
+
+# Install CUDA toolkit
+install_cuda: true
+
+# Install cuDNN for deep learning
+install_cudnn: true
+
+# GPU compute capability for RTX 5060 Ti (Ada Lovelace architecture)
+# 8.9 for RTX 40xx/50xx series
+cuda_compute_capability: "8.9"
+
+# ============================================
+# Conda Configuration
+# ============================================
+conda_installer: "miniforge"  # or "miniconda"
+conda_version: "latest"
+conda_install_dir: "{{ home_dir }}/miniforge3"
+
+# Auto-activate base environment on shell startup
+conda_auto_activate_base: false
+
+# ============================================
+# SD Forge CUDA Configuration
+# ============================================
+
+# Repository settings
+forge_repo_url: "https://github.com/6Morpheus6/forge-neo"
+forge_branch: "main"
+forge_install_dir: "{{ home_dir }}/llm/sd-webui-forge"
+
+# Conda environment
+forge_conda_env: "forge-cuda"
+forge_python_version: "3.11.9"
+
+# Model directories
+forge_models_dir: "{{ forge_install_dir }}/models"
+
+# Optional: Use a shared model directory (symlink)
+# Uncomment and set path to use shared models:
+# shared_models_dir: "/mnt/data/ai-models"
+# shared_models_types:
+#   - Stable-diffusion
+#   - Lora
+#   - VAE
+#   - ControlNet
+#   - ESRGAN
+
+# Launch script settings
+forge_commandline_args: >-
+  --xformers
+  --no-download-sd-model
+  --listen
+  --enable-insecure-extension-access
+
+# Performance mode for NVIDIA RTX 5060 Ti
+forge_gpu_mode: "dedicated-high"
+
+# ============================================
+# Base System Packages
+# ============================================
+
+# Development tools
+install_build_tools: true
+install_dev_packages: true
+
+# Additional packages to install (customize as needed)
+additional_apt_packages:
+  - htop
+  - vim
+  - tmux
+  - tree
+  - ncdu
+  - net-tools
+  - wget
+  - curl
+  - git
+  - build-essential
+  - cmake
+  - ninja-build
+  - python3-dev
+  - python3-pip
+  - libssl-dev
+  - libffi-dev
+  - libjpeg-dev
+  - libpng-dev
+  - libwebp-dev
+
+# ============================================
+# Desktop Preferences
+# ============================================
+
+# Configure desktop environment preferences
+configure_desktop: true
+
+# Git configuration
+git_user_name: "Aubrey Bailey"
+git_user_email: "{{ username }}@example.com"  # Change this!
+
+# Bash customizations
+custom_bash_aliases:
+  - alias ll='ls -alF'
+  - alias la='ls -A'
+  - alias l='ls -CF'
+  - alias gpu='nvidia-smi'
+  - alias gpuw='watch -n 1 nvidia-smi'
+  - alias forge='cd {{ forge_install_dir }} && conda activate {{ forge_conda_env }}'
+  - alias forge-launch='cd {{ forge_install_dir }} && ./launch-cuda.sh'
+
+# Custom bash exports
+custom_bash_exports:
+  - export EDITOR=vim
+  - export VISUAL=vim
+  - export CUDA_VISIBLE_DEVICES=0
+
+# ============================================
+# Optional Features
+# ============================================
+
+# Create systemd service for Forge (auto-start)
+create_forge_service: false
+
+# Install additional AI/ML tools
+install_jupyter: false
+install_tensorboard: false
+
+# Backup settings
+create_backup_before_changes: true
+backup_dir: "{{ home_dir }}/ansible-backups"

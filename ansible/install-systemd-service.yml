@@ -1,0 +1,81 @@
+---
+# Install systemd service for SD Forge (optional)
+# This allows Forge to auto-start on boot
+# Usage: ansible-playbook install-systemd-service.yml --ask-become-pass
+
+- name: Install systemd service for SD Forge
+  hosts: localhost
+  connection: local
+  become: yes
+  vars_files:
+    - group_vars/localhost.yml
+
+  tasks:
+    - name: Warning about systemd service
+      debug:
+        msg:
+          - "=========================================="
+          - "Installing SD Forge Systemd Service"
+          - "=========================================="
+          - ""
+          - "WARNING: This will make Forge auto-start on boot!"
+          - ""
+          - "The WebUI will be accessible at http://localhost:7860"
+          - "after every system boot."
+          - ""
+          - "To control the service:"
+          - "  sudo systemctl start forge-webui"
+          - "  sudo systemctl stop forge-webui"
+          - "  sudo systemctl restart forge-webui"
+          - "  sudo systemctl status forge-webui"
+          - ""
+          - "To disable auto-start:"
+          - "  sudo systemctl disable forge-webui"
+      tags: always
+
+    - name: Pause for confirmation
+      pause:
+        prompt: "Press Enter to continue, or Ctrl+C to abort"
+      tags: always
+
+    - name: Create systemd service file
+      template:
+        src: templates/forge-webui.service.j2
+        dest: /etc/systemd/system/forge-webui.service
+        mode: '0644'
+      tags: always
+
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: yes
+      tags: always
+
+    - name: Enable forge-webui service
+      systemd:
+        name: forge-webui
+        enabled: yes
+      tags: always
+
+    - name: Display service information
+      debug:
+        msg:
+          - "=========================================="
+          - "Systemd Service Installed!"
+          - "=========================================="
+          - ""
+          - "Service: forge-webui"
+          - "Status: Enabled (will start on boot)"
+          - ""
+          - "Commands:"
+          - "  Start:   sudo systemctl start forge-webui"
+          - "  Stop:    sudo systemctl stop forge-webui"
+          - "  Restart: sudo systemctl restart forge-webui"
+          - "  Status:  sudo systemctl status forge-webui"
+          - "  Logs:    journalctl -u forge-webui -f"
+          - ""
+          - "To disable auto-start:"
+          - "  sudo systemctl disable forge-webui"
+          - ""
+          - "To start now:"
+          - "  sudo systemctl start forge-webui"
+      tags: always
