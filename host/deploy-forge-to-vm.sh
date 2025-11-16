@@ -92,14 +92,30 @@ fi
 echo -e "\n${BLUE}Waiting for cloud-init to complete (this may take a few minutes)...${NC}"
 sleep 10
 
+# Check if SSH key authentication works
+echo -e "\n${BLUE}Checking SSH authentication...${NC}"
+SSH_KEY_WORKS=false
+if ssh -o BatchMode=yes -o ConnectTimeout=5 "${VM_USER}@${VM_IP}" echo "test" &>/dev/null; then
+    echo -e "${GREEN}✓ SSH key authentication available${NC}"
+    SSH_KEY_WORKS=true
+else
+    echo -e "${YELLOW}⚠ SSH key not configured, will use password${NC}"
+fi
+
 # Run Ansible playbook
 echo -e "\n${BLUE}Running Ansible playbook...${NC}"
-echo -e "${YELLOW}You will be prompted for the SSH password${NC}\n"
+if [ "$SSH_KEY_WORKS" = false ]; then
+    echo -e "${YELLOW}You will be prompted for the SSH password${NC}\n"
+    ANSIBLE_PASS_FLAG="--ask-pass"
+else
+    echo -e "${GREEN}Using SSH key authentication (no password needed)${NC}\n"
+    ANSIBLE_PASS_FLAG=""
+fi
 
 cd "$SCRIPT_DIR/../ansible"
 
 ansible-playbook -i "${VM_IP}," playbooks/site.yml \
-    --ask-pass \
+    $ANSIBLE_PASS_FLAG \
     --extra-vars "ansible_user=${VM_USER}" \
     -v
 
