@@ -3,17 +3,17 @@
 ## First Time Setup
 
 ```bash
-# 1. Check prerequisites
-./diagnostic.sh
+# 1. Check prerequisites (no sudo needed)
+./host/diagnostic.sh
 
-# 2. Install passthrough configuration
-sudo ./system-config.sh
+# 2. Install passthrough configuration (requires sudo)
+sudo ./host/system-config.sh
 
 # 3. Reboot
 sudo reboot
 
-# 4. Verify it worked
-./diagnostic.sh
+# 4. Verify it worked (no sudo needed)
+./host/diagnostic.sh
 lspci -k -s 01:00.0  # Should show: Kernel driver in use: vfio-pci
 ```
 
@@ -21,19 +21,19 @@ lspci -k -s 01:00.0  # Should show: Kernel driver in use: vfio-pci
 
 ### Check Current Status
 ```bash
-sudo ./toggle-passthrough.sh status
+sudo ./host/toggle-passthrough.sh status
 ```
 
 ### Use GPU for Host (Gaming/Desktop)
 ```bash
-sudo ./toggle-passthrough.sh disable
+sudo ./host/toggle-passthrough.sh disable
 sudo reboot
 # After reboot: NVIDIA drivers loaded, GPU works normally
 ```
 
 ### Use GPU for VMs (Passthrough)
 ```bash
-sudo ./toggle-passthrough.sh enable
+sudo ./host/toggle-passthrough.sh enable
 sudo reboot
 # After reboot: GPU bound to VFIO, ready for VM passthrough
 ```
@@ -111,11 +111,11 @@ dmesg | grep nvidia
 ### Start Over
 ```bash
 # Remove everything and start fresh
-sudo ./rollback.sh
+sudo ./host/rollback.sh
 sudo reboot
 
 # Then re-run setup
-sudo ./system-config.sh
+sudo ./host/system-config.sh
 ```
 
 ## File Locations

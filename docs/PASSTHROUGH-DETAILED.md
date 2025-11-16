@@ -40,10 +40,10 @@ The setup uses the **softdep method** (industry standard, Arch Wiki recommended)
 - `etc/modules-load.d/vfio-passthrough.conf`: Old module loader
 - `etc/systemd/system/nvidia-passthrough.service`: No longer needed
 
-**Diagnostic & Management**:
-- `diagnostic.sh`: Comprehensive system check (IOMMU, modules, PCI devices, readiness)
-- `toggle-passthrough.sh`: Toggle passthrough on/off without removing config (recommended)
-- `rollback.sh`: Completely removes all passthrough config and restores backups
+**Diagnostic & Management** (in `host/` directory):
+- `diagnostic.sh`: Comprehensive system check (no sudo needed)
+- `toggle-passthrough.sh`: Toggle passthrough on/off (requires sudo)
+- `rollback.sh`: Completely removes all passthrough config (requires sudo)
 
 ### PCI Device Management
 
@@ -57,11 +57,11 @@ Device addresses and IDs are automatically discovered by `system-config.sh` and 
 
 ### Full Installation Workflow
 ```bash
-# 1. Run diagnostics first
-./diagnostic.sh
+# 1. Run diagnostics first (no sudo needed)
+./host/diagnostic.sh
 
-# 2. Install passthrough configuration (prompts for confirmation)
-sudo ./system-config.sh
+# 2. Install passthrough configuration (requires sudo, prompts for confirmation)
+sudo ./host/system-config.sh
 
 # 3. Reboot
 sudo reboot
@@ -74,14 +74,14 @@ Use the toggle script to switch between host use and passthrough without removin
 
 ```bash
 # Check current status
-sudo ./toggle-passthrough.sh status
+sudo ./host/toggle-passthrough.sh status
 
 # Disable passthrough (use GPU on host for gaming/desktop)
-sudo ./toggle-passthrough.sh disable
+sudo ./host/toggle-passthrough.sh disable
 sudo reboot
 
 # Re-enable passthrough (use GPU for VMs)
-sudo ./toggle-passthrough.sh enable
+sudo ./host/toggle-passthrough.sh enable
 sudo reboot
 ```
 
@@ -94,13 +94,13 @@ sudo reboot
 Only use this if you want to completely remove passthrough configuration:
 
 ```bash
-sudo ./rollback.sh  # Removes all passthrough config, restores backups
+sudo ./host/rollback.sh  # Removes all passthrough config, restores backups
 sudo reboot
 ```
 
 ### Diagnostics
 ```bash
-./diagnostic.sh  # Comprehensive check: IOMMU, modules, PCI devices, readiness
+./host/diagnostic.sh  # Comprehensive check (no sudo needed)
 ```
 
 ### Manual Checks
@@ -186,7 +186,7 @@ Keep track of this location for manual recovery if needed.
 If you lose display after enabling passthrough:
 1. Boot to recovery mode (hold Shift during boot)
 2. Select "Root shell prompt"
-3. Run the rollback script: `./rollback.sh` (from repository directory)
+3. Run the rollback script: `./host/rollback.sh` (from repository directory)
 4. Or manually remove config files:
    ```bash
    rm -f /etc/modprobe.d/vfio.conf

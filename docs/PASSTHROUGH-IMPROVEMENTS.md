@@ -83,18 +83,18 @@ options vfio-pci ids=10de:2d04,10de:22eb
 **Example toggle workflow:**
 ```bash
 # Setup once
-sudo ./system-config.sh
+sudo ./host/system-config.sh
 
 # Want to use GPU for gaming on host?
-sudo ./toggle-passthrough.sh disable
+sudo ./host/toggle-passthrough.sh disable
 sudo reboot
 
 # Back to VMs?
-sudo ./toggle-passthrough.sh enable
+sudo ./host/toggle-passthrough.sh enable
 sudo reboot
 
 # Check current mode
-sudo ./toggle-passthrough.sh status
+sudo ./host/toggle-passthrough.sh status
 ```
 
 ## Migration Path
@@ -105,15 +105,15 @@ You have two options:
 
 **Option A: Clean slate (recommended)**
 ```bash
-sudo ./rollback.sh  # Removes all old configs
+sudo ./host/rollback.sh  # Removes all old configs
 sudo reboot
-sudo ./system-config.sh  # Run new improved script
+sudo ./host/system-config.sh  # Run new improved script
 sudo reboot
 ```
 
 **Option B: Direct upgrade**
 ```bash
-sudo ./system-config.sh  # Automatically cleans up old configs
+sudo ./host/system-config.sh  # Automatically cleans up old configs
 sudo reboot
 ```
 
@@ -139,23 +139,23 @@ The new script has NOT been tested yet. Recommended testing steps:
 
 ```bash
 # 1. Run diagnostics first
-./diagnostic.sh
+./host/diagnostic.sh
 
 # 2. Run new script (will auto-cleanup old configs)
-sudo ./system-config.sh
+sudo ./host/system-config.sh
 
 # 3. Reboot
 sudo reboot
 
 # 4. Verify VFIO binding
 lspci -k -s 01:00.0  # Should show "Kernel driver in use: vfio-pci"
-./diagnostic.sh       # Should show all checks passing
+./host/diagnostic.sh       # Should show all checks passing
 ```
 
 ## Rollback (If Needed)
 
 ```bash
-sudo ./rollback.sh
+sudo ./host/rollback.sh
 sudo reboot
 ```
 

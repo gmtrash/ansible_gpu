@@ -25,7 +25,7 @@ All paths use Ansible for reproducible, idempotent deployments.
 **Skills:**
 - Basic command line familiarity
 - Understanding of VMs (for VM deployment path)
-- Sudo access
+- Sudo access (only for system configuration changes, not diagnostics)
 
 ---
 
