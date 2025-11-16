@@ -97,10 +97,9 @@
 
 - name: Download default model (FLUX1-dev-nf4-v2) if requested
   ansible.builtin.shell: |
-    source venv/bin/activate
-    huggingface-cli download lllyasviel/flux1-dev-bnb-nf4 \
+    {{ forge_install_dir }}/app/venv/bin/huggingface-cli download lllyasviel/flux1-dev-bnb-nf4 \
       flux1-dev-bnb-nf4-v2.safetensors \
-      --local-dir models/Stable-diffusion
+      --local-dir {{ forge_install_dir }}/app/models/Stable-diffusion
   args:
     chdir: "{{ forge_install_dir }}/app"
     executable: /bin/bash
