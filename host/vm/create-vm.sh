@@ -141,6 +141,10 @@ users:
     lock_passwd: false
     passwd: $(echo "$VM_PASSWORD" | openssl passwd -6 -stdin)
 
+# Enable SSH password authentication for Ansible
+ssh_pwauth: true
+disable_root: true
+
 package_update: true
 package_upgrade: true
 
@@ -151,10 +155,13 @@ packages:
   - git
   - curl
   - wget
+  - openssh-server
 
 runcmd:
   - systemctl enable qemu-guest-agent
   - systemctl start qemu-guest-agent
+  - systemctl enable ssh
+  - systemctl start ssh
 
 power_state:
   mode: reboot
