@@ -35,21 +35,6 @@
     version: neo
     force: no
 
-- name: Install uv (Python package installer)
-  ansible.builtin.shell: |
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-  args:
-    creates: "{{ ansible_env.HOME }}/.cargo/bin/uv"
-  environment:
-    CARGO_HOME: "{{ ansible_env.HOME }}/.cargo"
-    RUSTUP_HOME: "{{ ansible_env.HOME }}/.rustup"
-
-- name: Add uv to PATH
-  ansible.builtin.lineinfile:
-    path: "{{ ansible_env.HOME }}/.bashrc"
-    line: 'export PATH="$HOME/.cargo/bin:$PATH"'
-    create: yes
-
 - name: Create Python virtual environment
   ansible.builtin.command:
     cmd: python3 -m venv venv
@@ -58,38 +43,39 @@
 
 - name: Upgrade pip in venv
   ansible.builtin.pip:
-    name: pip
+    name:
+      - pip
+      - wheel
+      - setuptools
     state: latest
     virtualenv: "{{ forge_install_dir }}/app/venv"
     virtualenv_python: python3
 
 - name: Install PyTorch with CUDA 12.8 support
-  ansible.builtin.shell: |
-    source venv/bin/activate
-    {{ ansible_env.HOME }}/.cargo/bin/uv pip install \
-      torch==2.7.0 torchvision==0.22.0 torchaudio==2.7.0 \
-      xformers==0.0.30 \
-      --index-url https://download.pytorch.org/whl/cu128 \
-      --force-reinstall --no-deps
-  args:
-    chdir: "{{ forge_install_dir }}/app"
-    executable: /bin/bash
-  environment:
-    PATH: "{{ ansible_env.HOME }}/.cargo/bin:{{ ansible_env.PATH }}"
+  ansible.builtin.pip:
+    name:
+      - torch==2.7.0
+      - torchvision==0.22.0
+      - torchaudio==2.7.0
+      - xformers==0.0.30
+    extra_args: "--index-url https://download.pytorch.org/whl/cu128"
+    virtualenv: "{{ forge_install_dir }}/app/venv"
+    virtualenv_python: python3
+
+- name: Install bitsandbytes
+  ansible.builtin.pip:
+    name: bitsandbytes
+    state: latest
+    virtualenv: "{{ forge_install_dir }}/app/venv"
+    virtualenv_python: python3
 
 - name: Install additional ML packages
-  ansible.builtin.shell: |
-    source venv/bin/activate
-    {{ ansible_env.HOME }}/.cargo/bin/uv pip install -U bitsandbytes --force-reinstall --no-deps
-    {{ ansible_env.HOME }}/.cargo/bin/uv pip install https://huggingface.co/nunchaku-tech/nunchaku/resolve/main/nunchaku-1.0.1%2Btorch2.7-cp310-cp310-linux_x86_64.whl
-    {{ ansible_env.HOME }}/.cargo/bin/uv pip install https://huggingface.co/MonsterMMORPG/SECourses_Premium_Flash_Attention/resolve/main/sageattention-2.1.1-cp310-cp310-linux_x86_64.whl
-    {{ ansible_env.HOME }}/.cargo/bin/uv pip install svglib==1.5.1
-    {{ ansible_env.HOME }}/.cargo/bin/uv pip install hf-xet
-  args:
-    chdir: "{{ forge_install_dir }}/app"
-    executable: /bin/bash
-  environment:
-    PATH: "{{ ansible_env.HOME }}/.cargo/bin:{{ ansible_env.PATH }}"
+  ansible.builtin.pip:
+    name:
+      - svglib==1.5.1
+      - hf-xet
+    virtualenv: "{{ forge_install_dir }}/app/venv"
+    virtualenv_python: python3
 
 - name: Run initial webui setup (creates requirements and downloads models)
   ansible.builtin.shell: |
@@ -100,7 +86,6 @@
     executable: /bin/bash
   environment:
     SD_WEBUI_RESTARTING: "1"
-    PATH: "{{ ansible_env.HOME }}/.cargo/bin:{{ ansible_env.PATH }}"
   timeout: 1200
   register: webui_setup
   failed_when: false
