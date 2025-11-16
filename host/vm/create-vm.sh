@@ -202,19 +202,28 @@ if [ "$HAS_AUDIO" = true ]; then
 fi
 
 # Replace placeholder GPU section
-# Using sed with proper escaping for multiline XML
-sed -i '/<!-- GPU Passthrough - REPLACE WITH YOUR GPU PCI ADDRESS -->/,/-->$/{
-  /<!-- GPU Passthrough/c\
-'"$GPU_HOSTDEV"'
-  /-->$/d
+# Write GPU hostdev to temp file and use it for insertion
+GPU_TMP=$(mktemp)
+echo "$GPU_HOSTDEV" > "$GPU_TMP"
+
+# Find the line number and replace the entire comment block
+sed -i '/<!-- GPU Passthrough - REPLACE WITH YOUR GPU PCI ADDRESS -->/,/-->/{
+  /<!-- GPU Passthrough - REPLACE WITH YOUR GPU PCI ADDRESS -->/r '"$GPU_TMP"'
+  d
 }' "$VM_XML"
 
+rm "$GPU_TMP"
+
 if [ "$HAS_AUDIO" = true ]; then
-    sed -i '/<!-- GPU Audio device/,/-->$/{
-      /<!-- GPU Audio device/c\
-'"$AUDIO_HOSTDEV"'
-      /-->$/d
+    AUDIO_TMP=$(mktemp)
+    echo "$AUDIO_HOSTDEV" > "$AUDIO_TMP"
+
+    sed -i '/<!-- GPU Audio device/,/-->/{
+      /<!-- GPU Audio device/r '"$AUDIO_TMP"'
+      d
     }' "$VM_XML"
+
+    rm "$AUDIO_TMP"
 fi
 
 # Enable IOMMU if needed
