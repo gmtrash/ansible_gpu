@@ -224,7 +224,7 @@ fi
 # Phase 6: Create VM
 print_step "Phase 6: Creating VM"
 
-if [ -f "$SCRIPT_DIR/scripts/vm/create-vm.sh" ]; then
+if [ -f "$SCRIPT_DIR/host/vm/create-vm.sh" ]; then
     print_success "Found create-vm.sh script"
 
     read -p "Do you want to create the VM now? (y/N): " CREATE_VM
@@ -238,7 +238,7 @@ if [ -f "$SCRIPT_DIR/scripts/vm/create-vm.sh" ]; then
         echo ""
         read -p "Press Enter to continue..."
 
-        sudo "$SCRIPT_DIR/scripts/vm/create-vm.sh"
+        sudo "$SCRIPT_DIR/host/vm/create-vm.sh"
 
         if [ $? -eq 0 ]; then
             print_success "VM created successfully"
@@ -251,7 +251,7 @@ if [ -f "$SCRIPT_DIR/scripts/vm/create-vm.sh" ]; then
         VM_CREATED=false
     fi
 else
-    print_error "create-vm.sh not found in $SCRIPT_DIR/scripts/vm/"
+    print_error "create-vm.sh not found in $SCRIPT_DIR/host/vm/"
     VM_CREATED=false
 fi
 
