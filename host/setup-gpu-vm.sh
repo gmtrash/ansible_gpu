@@ -287,7 +287,112 @@ if [ "$VM_CREATED" = true ] && [ "$USE_MACVTAP" = true ]; then
     print_success "VM started with dual networking"
 fi
 
-# Phase 8: Next Steps
+# Phase 8: SSH Key Setup (optional)
+if [ "$VM_CREATED" = true ]; then
+    print_step "Phase 8: SSH Key Setup (Optional)"
+
+    echo "Would you like to set up SSH key authentication for the VM?"
+    echo "This will:"
+    echo "  - Start the VM if not running"
+    echo "  - Wait for it to get an IP address"
+    echo "  - Add an entry to ~/.ssh/config"
+    echo "  - Copy your SSH public key to the VM (ssh-copy-id)"
+    echo ""
+    read -p "Set up SSH keys now? (y/N): " SETUP_SSH
+
+    if [[ $SETUP_SSH =~ ^[Yy]$ ]]; then
+        VM_NAME="forge-neo-gpu"
+
+        # Check if VM is running
+        if ! virsh list --state-running | grep -q "$VM_NAME"; then
+            echo "Starting VM..."
+            virsh start "$VM_NAME"
+            sleep 5
+        fi
+
+        # Wait for VM to get an IP address
+        echo "Waiting for VM to get an IP address..."
+        VM_IP=""
+        MAX_WAIT=60
+        WAIT_COUNT=0
+
+        while [ -z "$VM_IP" ] && [ $WAIT_COUNT -lt $MAX_WAIT ]; do
+            VM_IP=$(virsh domifaddr "$VM_NAME" | grep -oP '192\.168\.\d+\.\d+' | head -1)
+            if [ -z "$VM_IP" ]; then
+                echo -n "."
+                sleep 2
+                WAIT_COUNT=$((WAIT_COUNT + 1))
+            fi
+        done
+        echo ""
+
+        if [ -z "$VM_IP" ]; then
+            print_error "Could not get VM IP address after $((MAX_WAIT * 2)) seconds"
+            echo "You can set up SSH keys manually later"
+        else
+            print_success "VM IP address: $VM_IP"
+
+            # Wait for SSH to be available
+            echo "Waiting for SSH to be available..."
+            MAX_SSH_WAIT=60
+            SSH_WAIT_COUNT=0
+
+            while [ $SSH_WAIT_COUNT -lt $MAX_SSH_WAIT ]; do
+                if nc -z -w 2 "$VM_IP" 22 2>/dev/null; then
+                    print_success "SSH is available"
+                    break
+                fi
+                echo -n "."
+                sleep 2
+                SSH_WAIT_COUNT=$((SSH_WAIT_COUNT + 1))
+            done
+            echo ""
+
+            if [ $SSH_WAIT_COUNT -ge $MAX_SSH_WAIT ]; then
+                print_error "SSH not available after $((MAX_SSH_WAIT * 2)) seconds"
+                echo "You can set up SSH keys manually later"
+            else
+                # Add to ~/.ssh/config if not already there
+                SSH_CONFIG="$HOME/.ssh/config"
+                SSH_CONFIG_ENTRY="Host $VM_NAME
+    HostName $VM_IP
+    User ubuntu
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null"
+
+                if [ -f "$SSH_CONFIG" ] && grep -q "Host $VM_NAME" "$SSH_CONFIG"; then
+                    print_warning "SSH config entry for $VM_NAME already exists, skipping"
+                else
+                    echo "$SSH_CONFIG_ENTRY" >> "$SSH_CONFIG"
+                    print_success "Added $VM_NAME to ~/.ssh/config"
+                fi
+
+                # Run ssh-copy-id
+                echo ""
+                echo "Copying SSH public key to VM..."
+                echo "You will be prompted for the VM password"
+
+                if [ -f "$HOME/.ssh/id_rsa.pub" ]; then
+                    ssh-copy-id -i "$HOME/.ssh/id_rsa.pub" "ubuntu@$VM_IP"
+                elif [ -f "$HOME/.ssh/id_ed25519.pub" ]; then
+                    ssh-copy-id -i "$HOME/.ssh/id_ed25519.pub" "ubuntu@$VM_IP"
+                else
+                    ssh-copy-id "ubuntu@$VM_IP"
+                fi
+
+                if [ $? -eq 0 ]; then
+                    print_success "SSH key copied successfully!"
+                    echo ""
+                    echo "You can now SSH without password:"
+                    echo "  ssh $VM_NAME"
+                    echo "  (or: ssh ubuntu@$VM_IP)"
+                fi
+            fi
+        fi
+    fi
+fi
+
+# Phase 9: Next Steps
 print_step "Setup Summary"
 
 echo -e "${GREEN}✓ Prerequisites installed${NC}"
