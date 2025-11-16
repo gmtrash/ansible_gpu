@@ -114,7 +114,8 @@ fi
 read -p "Enter username for VM [ubuntu]: " VM_USER
 VM_USER=${VM_USER:-ubuntu}
 
-read -p "Enter password for VM [ubuntu]: " VM_PASSWORD
+read -sp "Enter password for VM [ubuntu]: " VM_PASSWORD
+echo  # Print newline after hidden password input
 VM_PASSWORD=${VM_PASSWORD:-ubuntu}
 
 read -p "Enter VM hostname [forge-neo]: " VM_HOSTNAME
