@@ -5,6 +5,29 @@
     cache_valid_time: 3600
   become: yes
 
+- name: Remove any existing NVIDIA packages
+  ansible.builtin.apt:
+    name:
+      - 'nvidia-*'
+      - 'libnvidia-*'
+    state: absent
+    purge: yes
+    autoremove: yes
+  become: yes
+  ignore_errors: yes
+
+- name: Fix broken packages if any
+  ansible.builtin.command: apt-get -f install -y
+  become: yes
+  changed_when: false
+  ignore_errors: yes
+
+- name: Clean apt cache
+  ansible.builtin.apt:
+    autoclean: yes
+    autoremove: yes
+  become: yes
+
 - name: Install required system packages
   ansible.builtin.apt:
     name:
@@ -38,15 +61,25 @@
   ansible.builtin.apt:
     name: "{{ nvidia_driver_version.stdout }}"
     state: present
+    install_recommends: yes
   become: yes
   when: nvidia_driver_version.stdout != ""
+  register: nvidia_install
+  retries: 2
+  delay: 10
+  until: nvidia_install is succeeded
 
 - name: Fallback to nvidia-driver-550 if detection fails
   ansible.builtin.apt:
     name: nvidia-driver-550
     state: present
+    install_recommends: yes
   become: yes
   when: nvidia_driver_version.stdout == ""
+  register: nvidia_fallback_install
+  retries: 2
+  delay: 10
+  until: nvidia_fallback_install is succeeded
 
 - name: Install CUDA keyring
   ansible.builtin.get_url:
