@@ -1,215 +1,290 @@
-# Ansible Deployment for Ubuntu Desktop + Stable Diffusion Forge ROCm
+# GPU Passthrough VM for Stable Diffusion Forge Neo
 
-This directory contains Ansible playbooks to automatically configure a fresh Ubuntu installation with your preferred setup, including ROCm and Stable Diffusion WebUI Forge Classic.
+Automated setup for running Stable Diffusion WebUI Forge Neo in a Ubuntu VM with NVIDIA GPU passthrough.
+
+## Overview
+
+This repository provides complete automation for:
+- **KVM/QEMU VM creation** with GPU passthrough
+- **Dual networking** (host access + LAN access)
+- **NVIDIA driver installation** (CUDA 12.8)
+- **Forge Neo setup** with PyTorch 2.7
+- **Systemd service** for auto-start
 
 ## Quick Start
 
-### 1. Install Ansible on Fresh Ubuntu
+### 1. Run the Setup Script
 
 ```bash
-sudo apt update
-sudo apt install -y ansible git
+./scripts/setup-gpu-vm.sh
 ```
 
-### 2. Clone this repository
+This interactive script will:
+- Check prerequisites
+- Verify IOMMU is enabled
+- Detect your NVIDIA GPU
+- Guide you through VFIO configuration
+- Create the VM with GPU passthrough
+- Configure dual networking
+
+### 2. Install Forge Neo
+
+After the VM is created:
 
 ```bash
-git clone <your-repo-url>
-cd sd-webui-forge-classic/ansible
+cd ansible
+# Edit inventory/hosts.ini with your VM IP
+ansible-playbook -i inventory/hosts.ini playbooks/site.yml
 ```
 
-### 3. Configure your settings
+### 3. Access the WebUI
 
-Edit `group_vars/localhost.yml` to customize:
-- User preferences
-- Model directories
-- ROCm settings
-- Optional applications
+- From host: `http://192.168.122.XX:7860`
+- From LAN: `http://192.168.1.XX:7860`
 
-### 4. Run the playbook
-
-```bash
-# Dry run (check mode)
-ansible-playbook main.yml --check
-
-# Actually apply
-ansible-playbook main.yml
-
-# Or run specific parts:
-ansible-playbook main.yml --tags "rocm"
-ansible-playbook main.yml --tags "forge"
-```
-
-## Playbook Structure
+## Repository Structure
 
 ```
-ansible/
-├── README.md                    # This file
-├── main.yml                     # Main playbook
-├── group_vars/
-│   └── localhost.yml            # Configuration variables
-├── roles/
-│   ├── base-system/             # Basic system packages
-│   ├── rocm/                    # AMD ROCm installation
-│   ├── conda/                   # Miniconda/Miniforge setup
-│   ├── forge-rocm/              # SD WebUI Forge Classic
-│   └── desktop-preferences/     # Optional: desktop configs
-└── files/
-    ├── bashrc_additions         # Shell customizations
-    └── conda_init.sh            # Conda initialization
+.
+├── README.md                           # This file
+├── SETUP-GPU-PASSTHROUGH.md            # Complete setup guide
+├── QUICKREF.md                         # Command reference
+├── configure-dual-networking.md        # Network setup details
+│
+├── scripts/                            # Helper scripts
+│   ├── setup-gpu-vm.sh                # Main setup script
+│   ├── vm/                            # VM management
+│   │   ├── create-vm.sh              # Create VM with GPU
+│   │   ├── add-gpu-to-vm.sh          # Add GPU to existing VM
+│   │   ├── hide-vm-detection.sh      # Hide hypervisor from VM
+│   │   └── configure-ubuntu-nat.sh   # Configure NAT network
+│   └── fixes/                         # Troubleshooting scripts
+│       ├── fix-vfio-permissions.sh   # Fix GPU permissions
+│       ├── fix-memlock-limits.sh     # Increase memory limits
+│       ├── fix-dns.sh                # Fix DNS issues
+│       └── fix-socat-service.sh      # Configure port forwarding
+│
+├── configs/                            # VM configurations
+│   ├── vm-template.xml               # VM definition template
+│   ├── ubuntu-ml.xml                 # Example VM config
+│   ├── ubuntu-nat-interface.xml      # NAT network config
+│   └── libvirt-macvtap-network.xml   # Macvtap network config
+│
+└── ansible/                            # Ansible automation
+    ├── ansible.cfg                    # Ansible configuration
+    ├── inventory/                     # Host inventory
+    │   └── hosts.ini.example         # Inventory template
+    ├── playbooks/
+    │   └── site.yml                  # Main playbook
+    └── roles/
+        ├── nvidia/                    # NVIDIA driver installation
+        └── forge-neo/                 # Forge Neo setup
 ```
 
 ## What Gets Installed
 
-### Base System (`base-system` role)
-- Build essentials (gcc, make, cmake)
-- Git, curl, wget
-- Python 3.11 build dependencies
-- System utilities (htop, vim, etc.)
+### On the Host
+- QEMU/KVM virtualization
+- libvirt for VM management
+- VFIO drivers for GPU isolation
 
-### ROCm (`rocm` role)
-- AMD ROCm 6.2+ repositories
-- ROCm core packages
-- rocm-smi and development tools
-- GPU architecture detection and configuration
+### In the VM
+- **Ubuntu 24.04 Server**
+- **NVIDIA GPU drivers** (auto-detected version)
+- **CUDA 12.8 Toolkit**
+- **PyTorch 2.7.0** with CUDA support
+- **Forge Neo WebUI** (Stable Diffusion)
+- **Python 3.10** virtual environment
+- **ML packages**: xformers, bitsandbytes, attention optimizations
+- **Default model**: FLUX1-dev-nf4-v2
+- **Systemd service** for auto-start
 
-### Conda (`conda` role)
-- Miniforge (conda-forge by default)
-- Configured in ~/.bashrc
-- Auto-activation setup (optional)
+## Prerequisites
 
-### SD Forge ROCm (`forge-rocm` role)
-- Clones/updates SD WebUI Forge Classic repository
-- Creates `forge-rocm` conda environment
-- Applies ROCm patches
-- Configures launch scripts
-- Optionally sets up model directories
+### Hardware
+- CPU with IOMMU support (Intel VT-d or AMD-Vi)
+- NVIDIA GPU for passthrough (not your primary display GPU)
+- 24GB+ RAM (16GB for VM + 8GB for host)
+- 100GB+ free disk space
 
-### Desktop Preferences (`desktop-preferences` role, optional)
-- Custom .bashrc additions
-- Git configuration
-- Other dotfiles
+### Software
+- Ubuntu 22.04 or 24.04 (host)
+- Sudo privileges
+- Internet connection
 
-## Available Tags
+## Setup Process
 
-Run specific parts of the playbook using tags:
+### Phase 1: Host Preparation (~15-30 minutes)
+1. Enable IOMMU in BIOS
+2. Configure kernel parameters
+3. Set up VFIO for GPU isolation
+4. Reboot
 
-```bash
-# Install only ROCm
-ansible-playbook main.yml --tags rocm
+### Phase 2: VM Creation (~10 minutes)
+1. Run `scripts/setup-gpu-vm.sh` or `scripts/vm/create-vm.sh`
+2. Select GPU for passthrough
+3. Configure VM settings
+4. Start VM
 
-# Install only SD Forge
-ansible-playbook main.yml --tags forge
+### Phase 3: Networking (~10 minutes)
+1. Configure dual networking:
+   - **NAT** (192.168.122.x) - host access
+   - **Macvtap** (192.168.1.x) - LAN access
+2. Update VM network config
 
-# Install system packages + ROCm
-ansible-playbook main.yml --tags "base,rocm"
+### Phase 4: Forge Neo Installation (~40 minutes)
+1. Set up Ansible inventory
+2. Run playbook
+3. Wait for installation (includes model download)
 
-# Skip desktop preferences
-ansible-playbook main.yml --skip-tags desktop
-```
+See [SETUP-GPU-PASSTHROUGH.md](SETUP-GPU-PASSTHROUGH.md) for detailed instructions.
 
-**All available tags:**
-- `base` - Base system packages
-- `rocm` - AMD ROCm installation
-- `conda` - Conda/Miniforge setup
-- `forge` - SD WebUI Forge Classic
-- `desktop` - Desktop preferences and dotfiles
+## Usage
 
-## Customization
-
-### Variables (`group_vars/localhost.yml`)
-
-```yaml
-# User settings
-username: aubreybailey
-home_dir: "/home/{{ username }}"
-
-# ROCm settings
-rocm_version: "6.2"
-gpu_architecture: "gfx1036"  # Auto-detected if not set
-
-# Forge settings
-forge_install_dir: "{{ home_dir }}/llm/sd-webui-forge-classic"
-forge_models_dir: "{{ forge_install_dir }}/models"
-forge_conda_env: "forge-rocm"
-
-# Optional: shared model directory
-# shared_models_dir: "/mnt/data/ai-models"
-```
-
-### Adding Your Own Tasks
-
-Create new roles in `roles/` or add tasks to existing roles:
+### VM Management
 
 ```bash
-# Create a new role
-ansible-galaxy init roles/my-custom-role
+# Start/stop VM
+virsh start forge-neo-gpu
+virsh shutdown forge-neo-gpu
 
-# Edit main.yml to include it:
-# - import_role:
-#     name: my-custom-role
+# Get VM IP addresses
+virsh domifaddr forge-neo-gpu
+
+# Connect to console
+virsh console forge-neo-gpu  # Ctrl+] to exit
+
+# SSH to VM
+ssh ubuntu@192.168.122.XX
 ```
 
-## Idempotency
-
-All tasks are idempotent - you can run the playbook multiple times safely:
-- Packages only install if missing
-- Config files only update if changed
-- Conda environments only create if missing
-- ROCm only installs if not present
-
-## Testing
-
-Test in a VM before running on your main system:
+### Forge Neo Management (in VM)
 
 ```bash
-# Use Vagrant or a fresh Ubuntu VM
-vagrant init ubuntu/jammy64
-vagrant up
-vagrant ssh
+# Start/stop service
+sudo systemctl start forge-neo
+sudo systemctl stop forge-neo
+sudo systemctl restart forge-neo
 
-# Inside VM:
-git clone <repo>
-cd ansible
-ansible-playbook main.yml
+# View logs
+sudo journalctl -u forge-neo -f
+
+# Monitor GPU usage
+watch -n 1 nvidia-smi
+
+# Manual start
+cd ~/forge-neo/app
+source venv/bin/activate
+bash webui.sh
 ```
+
+## Networking
+
+The VM has two network interfaces:
+
+| Interface | Type | IP Range | Purpose |
+|-----------|------|----------|---------|
+| enp1s0 | NAT | 192.168.122.x | Host access |
+| enp7s0 | Macvtap | 192.168.1.x | LAN access |
+
+**Access WebUI:**
+- From host: `http://192.168.122.XX:7860`
+- From LAN: `http://192.168.1.XX:7860`
+
+See [configure-dual-networking.md](configure-dual-networking.md) for details.
 
 ## Troubleshooting
 
-### "Failed to connect to localhost"
-```bash
-# Ensure localhost is in /etc/hosts
-echo "127.0.0.1 localhost" | sudo tee -a /etc/hosts
-```
-
-### "Permission denied"
-```bash
-# Run with --ask-become-pass
-ansible-playbook main.yml --ask-become-pass
-```
-
-### ROCm installation fails
-```bash
-# Manually verify ROCm repository
-sudo apt update
-apt-cache search rocm
-
-# Check Ubuntu version compatibility
-lsb_release -a
-```
-
-## Export Your Current Configuration
-
-To capture your current system state, use the included export script:
+### GPU not visible in VM
 
 ```bash
-./export-current-config.sh
+# Check on host
+lspci -nnk -d 10de: | grep -A3 "Kernel driver"
+# Should show: vfio-pci
+
+# Check in VM
+lspci | grep -i nvidia
+nvidia-smi
 ```
 
-This will update `group_vars/localhost.yml` with your current settings.
+### NVIDIA drivers not working
 
-## Further Reading
+```bash
+# In VM
+ubuntu-drivers devices
+sudo ubuntu-drivers autoinstall
+sudo reboot
+```
 
-- [Ansible Documentation](https://docs.ansible.com/)
-- [Ansible Best Practices](https://docs.ansible.com/ansible/latest/tips_tricks/ansible_tips_tricks.html)
-- [ROCm Installation Guide](https://rocmdocs.amd.com/en/latest/deploy/linux/quick_start.html)
+### Network issues
+
+```bash
+# In VM
+ip addr show
+sudo netplan apply
+sudo ufw allow 7860/tcp
+```
+
+### VFIO/IOMMU issues
+
+```bash
+# Use fix scripts
+./scripts/fixes/fix-vfio-permissions.sh
+./scripts/fixes/fix-memlock-limits.sh
+```
+
+See [SETUP-GPU-PASSTHROUGH.md](SETUP-GPU-PASSTHROUGH.md) for complete troubleshooting guide.
+
+## Performance
+
+With proper GPU passthrough:
+- **95-100% of bare metal GPU performance**
+- Full VRAM access
+- CUDA acceleration
+- Fast inference times
+
+## Documentation
+
+| File | Description |
+|------|-------------|
+| [README.md](README.md) | This file - overview and quick start |
+| [SETUP-GPU-PASSTHROUGH.md](SETUP-GPU-PASSTHROUGH.md) | Complete step-by-step guide |
+| [QUICKREF.md](QUICKREF.md) | Quick command reference |
+| [configure-dual-networking.md](configure-dual-networking.md) | Networking setup details |
+
+## Key Features
+
+- ✅ Full GPU passthrough with near-native performance
+- ✅ Dual networking for flexible access
+- ✅ Automated installation via Ansible
+- ✅ Systemd service for auto-start
+- ✅ Latest CUDA 12.8 and PyTorch 2.7
+- ✅ Pre-configured for Stable Diffusion
+- ✅ Comprehensive documentation
+
+## Time Estimate
+
+- Host preparation: 15-30 minutes
+- VM creation: 5-10 minutes
+- Networking setup: 5-10 minutes
+- Ansible playbook: 30-45 minutes
+- **Total: ~1-2 hours** (mostly automated)
+
+## Support
+
+For issues:
+1. Check [SETUP-GPU-PASSTHROUGH.md](SETUP-GPU-PASSTHROUGH.md) troubleshooting section
+2. Run troubleshooting scripts in `scripts/fixes/`
+3. Check VM logs: `sudo journalctl -u libvirtd`
+4. Check Forge Neo logs: `sudo journalctl -u forge-neo`
+
+## Additional Resources
+
+- [Forge Neo Repository](https://github.com/Haoming02/sd-webui-forge-classic/tree/neo)
+- [GPU Passthrough Wiki](https://wiki.archlinux.org/title/PCI_passthrough_via_OVMF)
+- [KVM Documentation](https://www.linux-kvm.org/)
+- [Libvirt Networking](https://wiki.libvirt.org/page/Networking)
+
+## License
+
+This repository contains automation scripts and configurations. Individual components (QEMU, libvirt, Forge Neo, etc.) maintain their respective licenses.
