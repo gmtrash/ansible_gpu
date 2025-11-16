@@ -77,6 +77,11 @@
     virtualenv: "{{ forge_install_dir }}/app/venv"
     virtualenv_python: python3
 
+- name: Check if webui launch script exists
+  ansible.builtin.stat:
+    path: "{{ forge_install_dir }}/app/webui.sh"
+  register: webui_script
+
 - name: Run initial webui setup (creates requirements and downloads models)
   ansible.builtin.shell: |
     source venv/bin/activate
@@ -87,8 +92,14 @@
   environment:
     SD_WEBUI_RESTARTING: "1"
   timeout: 1200
+  when: webui_script.stat.exists
   register: webui_setup
   failed_when: false
+
+- name: Note about first-run setup
+  ansible.builtin.debug:
+    msg: "Forge Neo will install additional requirements on first launch"
+  when: not webui_script.stat.exists
 
 - name: Install huggingface-cli
   ansible.builtin.pip:
