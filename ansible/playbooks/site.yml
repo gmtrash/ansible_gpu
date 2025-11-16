@@ -12,8 +12,8 @@
     forge_install_dir: "/home/{{ ansible_user }}/forge-neo"
     forge_download_default_model: true
     forge_create_service: true
-    forge_enable_service: false
-    forge_start_service: false
+    forge_enable_service: true
+    forge_start_service: true
 
   tasks:
     - name: Display target system information
