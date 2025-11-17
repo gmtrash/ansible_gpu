@@ -20,16 +20,13 @@
   become: yes
   changed_when: false
 
-- name: Ensure forge directories exist
+- name: Ensure forge app directory exists
   ansible.builtin.file:
-    path: "{{ item }}"
+    path: "{{ forge_install_dir }}/app"
     state: directory
     owner: "{{ ansible_user }}"
     group: "{{ ansible_user }}"
     mode: '0755'
-  loop:
-    - "{{ forge_install_dir }}/app/models"
-    - "{{ forge_install_dir }}/app/outputs"
 
 - name: Deploy Samba configuration
   ansible.builtin.template:
@@ -56,20 +53,25 @@
   ansible.builtin.debug:
     msg: |
       ========================================
-      Samba Shares Configured
+      Samba Share Configured
       ========================================
 
       Access from Windows:
-        \\{{ ansible_default_ipv4.address }}\forge-models
-        \\{{ ansible_default_ipv4.address }}\forge-outputs
+        \\{{ ansible_default_ipv4.address }}\forge-neo
 
       Access from Linux/Mac:
-        smb://{{ ansible_default_ipv4.address }}/forge-models
-        smb://{{ ansible_default_ipv4.address }}/forge-outputs
+        smb://{{ ansible_default_ipv4.address }}/forge-neo
 
       Username: {{ ansible_user }}
       Password: (your VM password)
 
-      Models directory: {{ forge_install_dir }}/app/models
-      Outputs directory: {{ forge_install_dir }}/app/outputs
+      Shared directory: {{ forge_install_dir }}/app
+      Contains:
+        - models/          (upload checkpoints, LoRAs, VAEs here)
+        - outputs/         (generated images)
+        - logs/            (web UI error logs if any)
+        - extensions/      (installed extensions)
+        - webui.log        (main application log)
+
+      Web UI logs also available via: sudo journalctl -u forge-neo -f
       ========================================

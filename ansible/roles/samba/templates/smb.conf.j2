@@ -18,21 +18,9 @@
    max log size = 1000
    logging = file
 
-[forge-models]
-   comment = Stable Diffusion Models
-   path = {{ forge_install_dir }}/app/models
-   browseable = yes
-   writable = yes
-   guest ok = no
-   valid users = {{ ansible_user }}
-   create mask = 0644
-   directory mask = 0755
-   force user = {{ ansible_user }}
-   force group = {{ ansible_user }}
-
-[forge-outputs]
-   comment = Stable Diffusion Generated Images
-   path = {{ forge_install_dir }}/app/outputs
+[forge-neo]
+   comment = Forge Neo - Stable Diffusion (models, outputs, logs)
+   path = {{ forge_install_dir }}/app
    browseable = yes
    writable = yes
    guest ok = no

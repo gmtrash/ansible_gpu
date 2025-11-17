@@ -226,30 +226,37 @@ Place model files in `/home/<username>/forge-neo/app/models/`:
 - [Civitai](https://civitai.com/models) - Community models and LoRAs
 - [HuggingFace](https://huggingface.co/models?pipeline_tag=text-to-image) - Official model repository
 
-### Access Files via Network Shares (Samba)
+### Access Files via Network Share (Samba)
 
-The deployment automatically configures Samba shares for easy access to models and outputs from your local network.
+The deployment automatically configures a Samba share for the entire Forge Neo directory, giving you easy access to everything from your local network.
 
 **Windows:**
 ```
-\\<vm-ip>\forge-models     # Models directory
-\\<vm-ip>\forge-outputs    # Generated images
+\\<vm-ip>\forge-neo
 ```
 
 **Linux/Mac:**
 ```
-smb://<vm-ip>/forge-models
-smb://<vm-ip>/forge-outputs
+smb://<vm-ip>/forge-neo
 ```
 
 **Credentials:**
 - Username: Your VM username (set during VM creation)
 - Password: Your VM password (set during VM creation)
 
-**Usage:**
-- **Upload models:** Drag and drop `.safetensors` or `.ckpt` files to `forge-models`
-- **Download images:** Browse `forge-outputs` to retrieve generated images
-- **Organize:** Create subdirectories in models for checkpoints, LoRAs, VAEs, etc.
+**What's shared:**
+- **models/** - Upload `.safetensors` or `.ckpt` files here
+  - `models/Stable-diffusion/` - Checkpoints
+  - `models/Lora/` - LoRA models
+  - `models/VAE/` - VAE files
+- **outputs/** - Download generated images
+- **logs/** - Web UI error logs (if any)
+- **webui.log** - Main application log file
+- **extensions/** - Installed extensions
+
+**Viewing logs:**
+- Browse to `webui.log` in the share for application logs
+- Or SSH to VM and run: `sudo journalctl -u forge-neo -f`
 
 **Note:** If you don't want Samba, set `samba_enabled: false` in `ansible/playbooks/site.yml` before deployment.
 
