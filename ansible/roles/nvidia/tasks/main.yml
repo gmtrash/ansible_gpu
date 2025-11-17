@@ -5,6 +5,12 @@
     cache_valid_time: 3600
   become: yes
 
+- name: Configure any pending dpkg packages
+  ansible.builtin.command: dpkg --configure -a
+  become: yes
+  changed_when: false
+  ignore_errors: yes
+
 - name: Remove any existing NVIDIA packages
   ansible.builtin.apt:
     name:
@@ -21,6 +27,18 @@
   become: yes
   changed_when: false
   ignore_errors: yes
+
+- name: Clean dpkg package database
+  ansible.builtin.command: dpkg --audit
+  become: yes
+  changed_when: false
+  ignore_errors: yes
+  register: dpkg_audit
+
+- name: Display dpkg audit results
+  ansible.builtin.debug:
+    var: dpkg_audit.stdout_lines
+  when: dpkg_audit.stdout != ""
 
 - name: Clean apt cache
   ansible.builtin.apt:
@@ -62,24 +80,45 @@
     name: "{{ nvidia_driver_version.stdout }}"
     state: present
     install_recommends: yes
+    dpkg_options: 'force-confold,force-confdef'
   become: yes
   when: nvidia_driver_version.stdout != ""
   register: nvidia_install
   retries: 2
   delay: 10
   until: nvidia_install is succeeded
+  ignore_errors: yes
+
+- name: Install NVIDIA driver with force-overwrite if previous attempt failed
+  ansible.builtin.shell: |
+    apt-get install -y -o Dpkg::Options::="--force-overwrite" {{ nvidia_driver_version.stdout }}
+  become: yes
+  when:
+    - nvidia_driver_version.stdout != ""
+    - nvidia_install is failed
+  register: nvidia_force_install
 
 - name: Fallback to nvidia-driver-550 if detection fails
   ansible.builtin.apt:
     name: nvidia-driver-550
     state: present
     install_recommends: yes
+    dpkg_options: 'force-confold,force-confdef'
   become: yes
   when: nvidia_driver_version.stdout == ""
   register: nvidia_fallback_install
   retries: 2
   delay: 10
   until: nvidia_fallback_install is succeeded
+  ignore_errors: yes
+
+- name: Fallback install with force-overwrite if needed
+  ansible.builtin.shell: |
+    apt-get install -y -o Dpkg::Options::="--force-overwrite" nvidia-driver-550
+  become: yes
+  when:
+    - nvidia_driver_version.stdout == ""
+    - nvidia_fallback_install is failed
 
 - name: Install CUDA keyring
   ansible.builtin.get_url:
@@ -116,6 +155,18 @@
   loop:
     - 'export PATH=/usr/local/cuda-12.8/bin:$PATH'
     - 'export LD_LIBRARY_PATH=/usr/local/cuda-12.8/lib64:$LD_LIBRARY_PATH'
+
+- name: Verify NVIDIA driver installation
+  ansible.builtin.command: dpkg -l | grep -i nvidia-driver
+  become: yes
+  changed_when: false
+  register: nvidia_verify
+  ignore_errors: yes
+
+- name: Display installed NVIDIA driver version
+  ansible.builtin.debug:
+    msg: "Installed NVIDIA driver: {{ nvidia_verify.stdout_lines }}"
+  when: nvidia_verify.rc == 0
 
 - name: Check if reboot is required
   ansible.builtin.stat:
