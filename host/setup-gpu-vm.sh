@@ -196,35 +196,8 @@ vfio_virqfd" | sudo tee /etc/modules-load.d/vfio.conf
     fi
 fi
 
-# Phase 5: Network Configuration
-print_step "Phase 5: Checking Network Configuration"
-
-echo "Available network interfaces:"
-ip -brief link show | grep -v "^lo"
-
-echo -e "\nFor macvtap networking, you need to specify your physical network interface."
-read -p "Enter your physical network interface (e.g., enp7s0, eth0): " PHYS_IFACE
-
-if [ -z "$PHYS_IFACE" ]; then
-    print_warning "No interface specified, will use default NAT only"
-    USE_MACVTAP=false
-else
-    if ip link show "$PHYS_IFACE" >/dev/null 2>&1; then
-        print_success "Interface $PHYS_IFACE exists"
-        USE_MACVTAP=true
-
-        # Update macvtap config
-        sed -i "s|<interface dev=\".*\"|<interface dev=\"$PHYS_IFACE\"|" \
-            "$SCRIPT_DIR/../configs/libvirt-macvtap-network.xml"
-        print_success "Updated macvtap configuration"
-    else
-        print_error "Interface $PHYS_IFACE not found"
-        USE_MACVTAP=false
-    fi
-fi
-
-# Phase 6: Create VM
-print_step "Phase 6: Creating VM"
+# Phase 5: Create VM
+print_step "Phase 5: Creating VM"
 
 if [ -f "$SCRIPT_DIR/vm/create-vm.sh" ]; then
     print_success "Found create-vm.sh script"
@@ -235,6 +208,7 @@ if [ -f "$SCRIPT_DIR/vm/create-vm.sh" ]; then
         echo "The script will guide you through VM creation."
         echo "You'll be asked for:"
         echo "  - GPU selection"
+        echo "  - Network interface (optional - for Macvtap LAN access)"
         echo "  - VM username/password"
         echo "  - VM hostname"
         echo ""
@@ -257,39 +231,9 @@ else
     VM_CREATED=false
 fi
 
-# Phase 7: Configure Networking (if VM was created)
-if [ "$VM_CREATED" = true ] && [ "$USE_MACVTAP" = true ]; then
-    print_step "Phase 7: Configuring Dual Networking"
-
-    VM_NAME="forge-neo-gpu"
-
-    echo "Setting up macvtap network..."
-    if virsh net-list --all | grep -q "macvtap-bridge"; then
-        print_success "macvtap-bridge network already exists"
-    else
-        virsh net-define "$SCRIPT_DIR/../configs/libvirt-macvtap-network.xml"
-        virsh net-start macvtap-bridge
-        virsh net-autostart macvtap-bridge
-        print_success "macvtap-bridge network created"
-    fi
-
-    echo "Adding macvtap interface to VM..."
-    virsh shutdown "$VM_NAME" 2>/dev/null || true
-    sleep 5
-
-    virsh attach-interface "$VM_NAME" \
-        --type network \
-        --source macvtap-bridge \
-        --model virtio \
-        --config 2>/dev/null || print_warning "Interface may already exist"
-
-    virsh start "$VM_NAME"
-    print_success "VM started with dual networking"
-fi
-
-# Phase 8: SSH Key Setup (optional)
+# Phase 6: SSH Key Setup (optional)
 if [ "$VM_CREATED" = true ]; then
-    print_step "Phase 8: SSH Key Setup (Optional)"
+    print_step "Phase 6: SSH Key Setup (Optional)"
 
     echo "Would you like to set up SSH key authentication for the VM?"
     echo "This will:"
@@ -407,43 +351,27 @@ if [ "$VM_CREATED" = true ]; then
 else
     echo -e "${YELLOW}⚠ VM not created${NC}"
 fi
-if [ "$USE_MACVTAP" = true ]; then
-    echo -e "${GREEN}✓ Dual networking configured${NC}"
-else
-    echo -e "${YELLOW}⚠ Using NAT only${NC}"
-fi
 
 echo -e "\n${BLUE}Next Steps:${NC}\n"
 
 if [ "$VM_CREATED" = true ]; then
-    echo "1. Wait for VM to finish cloud-init (~2 minutes)"
-    echo "   Check with: virsh console forge-neo-gpu"
+    echo "1. Deploy Forge Neo to the VM:"
+    echo "   cd $SCRIPT_DIR"
+    echo "   ./deploy-forge-to-vm.sh"
     echo ""
-    echo "2. Get VM IP address:"
-    echo "   virsh domifaddr forge-neo-gpu"
-    echo ""
-    echo "3. SSH into VM:"
-    echo "   ssh ubuntu@<VM-IP>"
-    echo ""
-    echo "4. Configure dual networking (if using macvtap):"
-    echo "   See configure-dual-networking.md"
-    echo ""
-    echo "5. Run Ansible playbook to install Forge Neo:"
-    echo "   cd ansible"
-    echo "   # Edit inventory/hosts.ini with VM IP"
-    echo "   ansible-playbook -i inventory/hosts.ini playbooks/site.yml"
-    echo ""
-    echo "6. Access Forge Neo WebUI:"
+    echo "2. Access Forge Neo WebUI (after deployment completes):"
     echo "   http://<VM-IP>:7860"
+    echo ""
+    echo "Alternative manual steps:"
+    echo "  - Check VM console: virsh console forge-neo-gpu"
+    echo "  - Get VM IP: virsh domifaddr forge-neo-gpu"
+    echo "  - SSH to VM: ssh <username>@<VM-IP>"
 else
-    echo "1. Configure VFIO if not done (see SETUP-GPU-PASSTHROUGH.md)"
-    echo "2. Reboot if needed"
-    echo "3. Run this script again to create VM"
+    echo "1. Run this script again and choose to create the VM"
+    echo "2. Or manually run: sudo $SCRIPT_DIR/vm/create-vm.sh"
 fi
 
 echo -e "\n${BLUE}Documentation:${NC}"
-echo "  - Full guide: SETUP-GPU-PASSTHROUGH.md"
-echo "  - Networking: configure-dual-networking.md"
-echo "  - Quick reference: QUICKREF.md"
+echo "  - Full guide: ../README.md"
 
 echo -e "\n${GREEN}Setup helper completed!${NC}\n"
