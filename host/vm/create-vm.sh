@@ -43,6 +43,23 @@ else
     echo -e "${GREEN}✓ Using existing directory: $IMAGE_DIR${NC}"
 fi
 
+# Set proper permissions for libvirt access
+echo -e "${YELLOW}Setting permissions for libvirt access...${NC}"
+
+# Make parent directories executable so libvirt-qemu can traverse them
+# This allows libvirt to access files in user home directories
+chmod o+x "$HOME" 2>/dev/null || true
+PARENT_DIR=$(dirname "$IMAGE_DIR")
+while [ "$PARENT_DIR" != "$HOME" ] && [ "$PARENT_DIR" != "/" ]; do
+    chmod o+x "$PARENT_DIR" 2>/dev/null || true
+    PARENT_DIR=$(dirname "$PARENT_DIR")
+done
+
+# Make the storage directory readable and executable by libvirt
+chmod 755 "$IMAGE_DIR"
+
+echo -e "${GREEN}✓ Permissions configured${NC}"
+
 VM_DISK="${IMAGE_DIR}/${VM_NAME}.qcow2"
 CLOUD_INIT_ISO="${IMAGE_DIR}/${VM_NAME}-cloud-init.iso"
 echo ""
@@ -148,9 +165,13 @@ if [ ! -f "$UBUNTU_IMAGE" ]; then
     echo -e "\n${YELLOW}Downloading Ubuntu ${UBUNTU_VERSION} cloud image...${NC}"
     wget -O "$UBUNTU_IMAGE" \
         "https://cloud-images.ubuntu.com/releases/${UBUNTU_VERSION}/release/ubuntu-${UBUNTU_VERSION}-server-cloudimg-amd64.img"
+    chmod 644 "$UBUNTU_IMAGE"
 else
     echo -e "${GREEN}Ubuntu image already exists${NC}"
 fi
+
+# Ensure base image is readable
+chmod 644 "$UBUNTU_IMAGE" 2>/dev/null || true
 
 # Create VM disk
 echo -e "\n${YELLOW}Creating VM disk (${DISK_SIZE})...${NC}"
@@ -165,6 +186,10 @@ if [ -f "$VM_DISK" ]; then
 else
     qemu-img create -f qcow2 -F qcow2 -b "$UBUNTU_IMAGE" "$VM_DISK" "$DISK_SIZE"
 fi
+
+# Set permissions on the disk image so libvirt can access it
+chmod 644 "$VM_DISK"
+echo -e "${GREEN}✓ Disk permissions set${NC}"
 
 # Get user details for VM
 read -p "Enter username for VM [ubuntu]: " VM_USER
@@ -228,6 +253,9 @@ EOF
 # Create cloud-init ISO
 cloud-localds "$CLOUD_INIT_ISO" "${CLOUD_INIT_DIR}/user-data" "${CLOUD_INIT_DIR}/meta-data"
 rm -rf "$CLOUD_INIT_DIR"
+
+# Set permissions on cloud-init ISO so libvirt can access it
+chmod 644 "$CLOUD_INIT_ISO"
 
 echo -e "${GREEN}Cloud-init ISO created${NC}"
 
