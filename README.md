@@ -185,17 +185,44 @@ sudo systemctl stop forge-neo
 
 ### Add Models
 
-Forge Neo starts with no models. You can download them:
+The deployment automatically downloads SD 1.5 as a starter model. To add more models:
 
-1. **Via Web UI:** Navigate to `http://<vm-ip>:7860` and use the built-in model downloader
-2. **Manual Download:** Place models in `/home/<username>/forge-neo/app/models/`
-   - Stable Diffusion checkpoints: `models/Stable-diffusion/`
-   - LoRA models: `models/Lora/`
-   - VAE: `models/VAE/`
+**Option 1: Use the Download Helper Script** (Recommended)
+```bash
+# SSH to VM
+ssh <username>@<vm-ip>
 
-**Recommended sources:**
-- [Civitai](https://civitai.com/) - Community models and LoRAs
-- [Hugging Face](https://huggingface.co/) - Official model repository
+# Download from HuggingFace
+cd ~/forge-neo/app
+./download-model.sh hf runwayml/stable-diffusion-v1-5
+./download-model.sh hf stabilityai/stable-diffusion-xl-base-1.0
+
+# Download from Civitai (using model ID)
+./download-model.sh civitai 4384      # Example: Dreamshaper
+./download-model.sh civitai <model-id>
+
+# Download LoRA models
+./download-model.sh civitai <model-id> lora
+
+# Download VAE
+./download-model.sh hf stabilityai/sd-vae-ft-mse vae
+```
+
+**Option 2: Install Civitai Helper Extension**
+1. Open Forge Neo WebUI: `http://<vm-ip>:7860`
+2. Go to Extensions → Install from URL
+3. Enter: `https://github.com/civitai/sd_civitai_extension`
+4. Click Install and restart Forge Neo
+
+**Option 3: Manual Download**
+Place model files in `/home/<username>/forge-neo/app/models/`:
+- Stable Diffusion checkpoints: `models/Stable-diffusion/`
+- LoRA models: `models/Lora/`
+- VAE: `models/VAE/`
+
+**Where to find models:**
+- [Civitai](https://civitai.com/models) - Community models and LoRAs
+- [HuggingFace](https://huggingface.co/models?pipeline_tag=text-to-image) - Official model repository
 
 ---
 

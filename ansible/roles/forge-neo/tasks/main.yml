@@ -69,11 +69,12 @@
     virtualenv: "{{ forge_install_dir }}/app/venv"
     virtualenv_python: python3
 
-- name: Install additional ML packages
+- name: Install additional ML packages and download tools
   ansible.builtin.pip:
     name:
       - svglib==1.5.1
       - hf-xet
+      - huggingface-hub
     virtualenv: "{{ forge_install_dir }}/app/venv"
     virtualenv_python: python3
 
@@ -101,9 +102,42 @@
     msg: "Forge Neo will install additional requirements on first launch"
   when: not webui_script.stat.exists
 
+- name: Copy model download helper script
+  ansible.builtin.copy:
+    src: download-model.sh
+    dest: "{{ forge_install_dir }}/app/download-model.sh"
+    mode: '0755'
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+
+- name: Download starter model from HuggingFace (optional)
+  ansible.builtin.shell: |
+    source venv/bin/activate
+    huggingface-cli download runwayml/stable-diffusion-v1-5 \
+      --include "v1-5-pruned-emaonly.safetensors" \
+      --local-dir models/Stable-diffusion/sd-v1-5 \
+      --local-dir-use-symlinks False
+  args:
+    chdir: "{{ forge_install_dir }}/app"
+    executable: /bin/bash
+    creates: "{{ forge_install_dir }}/app/models/Stable-diffusion/sd-v1-5/v1-5-pruned-emaonly.safetensors"
+  when: forge_download_default_model | default(false)
+  ignore_errors: yes
+
 - name: Note about model downloads
   ansible.builtin.debug:
-    msg: "Models can be downloaded through the Forge Neo web interface at http://{{ ansible_default_ipv4.address }}:7860"
+    msg: |
+      Models can be downloaded using the helper script:
+        cd {{ forge_install_dir }}/app
+        ./download-model.sh hf runwayml/stable-diffusion-v1-5
+        ./download-model.sh civitai <model-id>
+
+      Popular models:
+        HuggingFace: runwayml/stable-diffusion-v1-5
+        HuggingFace: stabilityai/stable-diffusion-xl-base-1.0
+        Civitai: Browse at https://civitai.com/models
+
+      Or install the Civitai Helper extension in the WebUI
 
 - name: Create systemd service for Forge Neo
   ansible.builtin.template:
