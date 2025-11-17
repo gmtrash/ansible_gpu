@@ -207,6 +207,7 @@ if [ -f "$SCRIPT_DIR/vm/create-vm.sh" ]; then
         echo ""
         echo "The script will guide you through VM creation."
         echo "You'll be asked for:"
+        echo "  - VM storage directory (where to store disk images)"
         echo "  - GPU selection"
         echo "  - Network interface (optional - for Macvtap LAN access)"
         echo "  - VM username/password"
@@ -214,7 +215,7 @@ if [ -f "$SCRIPT_DIR/vm/create-vm.sh" ]; then
         echo ""
         read -p "Press Enter to continue..."
 
-        sudo "$SCRIPT_DIR/vm/create-vm.sh"
+        "$SCRIPT_DIR/vm/create-vm.sh"
 
         if [ $? -eq 0 ]; then
             print_success "VM created successfully"
@@ -368,7 +369,7 @@ if [ "$VM_CREATED" = true ]; then
     echo "  - SSH to VM: ssh <username>@<VM-IP>"
 else
     echo "1. Run this script again and choose to create the VM"
-    echo "2. Or manually run: sudo $SCRIPT_DIR/vm/create-vm.sh"
+    echo "2. Or manually run: $SCRIPT_DIR/vm/create-vm.sh"
 fi
 
 echo -e "\n${BLUE}Documentation:${NC}"

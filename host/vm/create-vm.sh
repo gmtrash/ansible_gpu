@@ -7,9 +7,6 @@ VM_MEMORY="16384"  # 16GB in MB
 VM_VCPUS="8"
 DISK_SIZE="100G"
 UBUNTU_VERSION="24.04"
-IMAGE_DIR="/var/lib/libvirt/images"
-VM_DISK="${IMAGE_DIR}/${VM_NAME}.qcow2"
-CLOUD_INIT_ISO="${IMAGE_DIR}/${VM_NAME}-cloud-init.iso"
 
 # Colors for output
 RED='\033[0;31m'
@@ -19,11 +16,36 @@ NC='\033[0m' # No Color
 
 echo -e "${GREEN}=== Forge Neo GPU VM Creation Script ===${NC}\n"
 
-# Check if running as root
-if [[ $EUID -ne 0 ]]; then
-   echo -e "${RED}Error: This script must be run as root${NC}"
+# Check if user is in libvirt group
+if ! groups | grep -q libvirt; then
+   echo -e "${RED}Error: You must be in the 'libvirt' group${NC}"
+   echo -e "Run: sudo usermod -aG libvirt $USER"
+   echo -e "Then log out and back in, or run: newgrp libvirt"
    exit 1
 fi
+
+# Ask for VM storage directory
+echo -e "${YELLOW}VM Storage Location${NC}"
+echo "Where would you like to store VM disk images?"
+DEFAULT_IMAGE_DIR="$HOME/libvirt/images"
+read -p "Enter directory path [${DEFAULT_IMAGE_DIR}]: " IMAGE_DIR
+IMAGE_DIR=${IMAGE_DIR:-$DEFAULT_IMAGE_DIR}
+
+# Expand tilde if present
+IMAGE_DIR="${IMAGE_DIR/#\~/$HOME}"
+
+# Create directory if it doesn't exist
+if [ ! -d "$IMAGE_DIR" ]; then
+    echo -e "${YELLOW}Creating directory: $IMAGE_DIR${NC}"
+    mkdir -p "$IMAGE_DIR"
+    echo -e "${GREEN}✓ Directory created${NC}"
+else
+    echo -e "${GREEN}✓ Using existing directory: $IMAGE_DIR${NC}"
+fi
+
+VM_DISK="${IMAGE_DIR}/${VM_NAME}.qcow2"
+CLOUD_INIT_ISO="${IMAGE_DIR}/${VM_NAME}-cloud-init.iso"
+echo ""
 
 # Check for required tools
 for cmd in virsh virt-install qemu-img wget cloud-localds; do

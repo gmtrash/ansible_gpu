@@ -69,14 +69,15 @@ This creates an Ubuntu 24.04 VM with your GPU passed through:
 
 ```bash
 cd host/vm
-sudo ./create-vm.sh
+./create-vm.sh
 ```
 
 **Interactive prompts:**
-1. **Select GPU** - Choose which NVIDIA GPU to pass through
-2. **Select Network Interface** (optional) - Choose physical NIC for LAN access via Macvtap, or skip for NAT-only
-3. **VM Credentials** - Set username/password (password input is hidden)
-4. **VM Hostname** - Set hostname for the VM
+1. **VM Storage Directory** - Where to store VM disk images (default: `~/libvirt/images`)
+2. **Select GPU** - Choose which NVIDIA GPU to pass through
+3. **Select Network Interface** (optional) - Choose physical NIC for LAN access via Macvtap, or skip for NAT-only
+4. **VM Credentials** - Set username/password (password input is hidden)
+5. **VM Hostname** - Set hostname for the VM
 
 **Networking Options:**
 - **NAT only** (default): VM gets `192.168.122.x` IP, accessible from host
@@ -85,8 +86,9 @@ sudo ./create-vm.sh
   - LAN DHCP IP - for access from other devices on your network
 
 **What it does:**
-- Downloads Ubuntu 24.04 cloud image (if not cached)
-- Creates 100GB qcow2 disk
+- Creates VM storage directory in your home directory (or custom location)
+- Downloads Ubuntu 24.04 cloud image to storage directory (if not cached)
+- Creates 100GB qcow2 disk in storage directory
 - Configures cloud-init for automated provisioning
 - Generates VM XML with GPU passthrough configuration
 - Creates and defines VM (does not start it)
