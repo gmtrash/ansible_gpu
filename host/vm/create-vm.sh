@@ -226,6 +226,17 @@ users:
 ssh_pwauth: true
 disable_root: true
 
+# Configure all network interfaces with DHCP
+network:
+  version: 2
+  ethernets:
+    all-en:
+      match:
+        name: "en*"
+      dhcp4: true
+      dhcp6: true
+      optional: true
+
 package_update: true
 package_upgrade: true
 

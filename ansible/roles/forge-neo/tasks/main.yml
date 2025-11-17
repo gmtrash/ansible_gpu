@@ -122,7 +122,13 @@
     executable: /bin/bash
     creates: "{{ forge_install_dir }}/app/models/Stable-diffusion/sd-v1-5/v1-5-pruned-emaonly.safetensors"
   when: forge_download_default_model | default(false)
+  register: model_download
   ignore_errors: yes
+
+- name: Display model download result
+  ansible.builtin.debug:
+    msg: "{{ 'Starter model downloaded successfully' if model_download.rc == 0 else 'Model download failed - you can download models manually later' }}"
+  when: forge_download_default_model | default(false) and not model_download.skipped | default(false)
 
 - name: Note about model downloads
   ansible.builtin.debug:
