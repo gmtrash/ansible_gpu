@@ -80,45 +80,26 @@
     name: "{{ nvidia_driver_version.stdout }}"
     state: present
     install_recommends: yes
-    dpkg_options: 'force-confold,force-confdef'
+    dpkg_options: 'force-confold,force-confdef,force-overwrite'
   become: yes
   when: nvidia_driver_version.stdout != ""
   register: nvidia_install
   retries: 2
   delay: 10
   until: nvidia_install is succeeded
-  ignore_errors: yes
-
-- name: Install NVIDIA driver with force-overwrite if previous attempt failed
-  ansible.builtin.shell: |
-    apt-get install -y -o Dpkg::Options::="--force-overwrite" {{ nvidia_driver_version.stdout }}
-  become: yes
-  when:
-    - nvidia_driver_version.stdout != ""
-    - nvidia_install is failed
-  register: nvidia_force_install
 
 - name: Fallback to nvidia-driver-550 if detection fails
   ansible.builtin.apt:
     name: nvidia-driver-550
     state: present
     install_recommends: yes
-    dpkg_options: 'force-confold,force-confdef'
+    dpkg_options: 'force-confold,force-confdef,force-overwrite'
   become: yes
   when: nvidia_driver_version.stdout == ""
   register: nvidia_fallback_install
   retries: 2
   delay: 10
   until: nvidia_fallback_install is succeeded
-  ignore_errors: yes
-
-- name: Fallback install with force-overwrite if needed
-  ansible.builtin.shell: |
-    apt-get install -y -o Dpkg::Options::="--force-overwrite" nvidia-driver-550
-  become: yes
-  when:
-    - nvidia_driver_version.stdout == ""
-    - nvidia_fallback_install is failed
 
 - name: Install CUDA keyring
   ansible.builtin.get_url:
