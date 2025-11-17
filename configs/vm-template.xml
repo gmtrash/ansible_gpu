@@ -92,12 +92,22 @@
       <address type='pci' domain='0x0000' bus='0x02' slot='0x00' function='0x0'/>
     </controller>
 
-    <!-- Network -->
+    <!-- Network - NAT (for host access) -->
     <interface type='network'>
       <source network='default'/>
       <model type='virtio'/>
       <address type='pci' domain='0x0000' bus='0x01' slot='0x00' function='0x0'/>
     </interface>
+
+    <!-- Macvtap LAN Interface - REPLACE WITH YOUR NETWORK INTERFACE -->
+    <!-- This will be configured by create-vm.sh based on your physical interface -->
+    <!--
+    <interface type='direct'>
+      <source dev='eth0' mode='bridge'/>
+      <model type='virtio'/>
+      <address type='pci' domain='0x0000' bus='0x09' slot='0x00' function='0x0'/>
+    </interface>
+    -->
 
     <!-- GPU Passthrough - REPLACE WITH YOUR GPU PCI ADDRESS -->
     <!-- Find your GPU address with: lspci -nn | grep -i nvidia -->

@@ -86,6 +86,40 @@ else
     HAS_AUDIO=false
 fi
 
+# Detect network interfaces for Macvtap (LAN access)
+echo -e "\n${YELLOW}Detecting network interfaces for LAN access (Macvtap)...${NC}"
+
+# Get list of physical network interfaces (exclude lo, virbr, docker, etc.)
+INTERFACES=$(ls /sys/class/net/ | grep -v -E '^(lo|virbr|docker|veth)' || true)
+
+if [ -z "$INTERFACES" ]; then
+    echo -e "${YELLOW}No physical network interfaces found${NC}"
+    echo -e "${YELLOW}VM will only have NAT access (192.168.122.x)${NC}"
+    HAS_MACVTAP=false
+else
+    echo -e "${GREEN}Available network interfaces:${NC}"
+    echo "$INTERFACES" | nl -w2 -s'. '
+    echo -e "${YELLOW}Note: Macvtap will allow VM to get IP from LAN DHCP${NC}"
+
+    read -p "Enter interface number for LAN access (or press Enter to skip): " NIC_SELECTION
+
+    if [ -z "$NIC_SELECTION" ]; then
+        echo -e "${YELLOW}Skipping Macvtap - VM will only have NAT access${NC}"
+        HAS_MACVTAP=false
+    else
+        SELECTED_NIC=$(echo "$INTERFACES" | sed -n "${NIC_SELECTION}p")
+
+        if [ -z "$SELECTED_NIC" ]; then
+            echo -e "${YELLOW}Invalid selection - skipping Macvtap${NC}"
+            HAS_MACVTAP=false
+        else
+            echo -e "${GREEN}Selected network interface: $SELECTED_NIC${NC}"
+            echo -e "${GREEN}VM will get LAN IP via DHCP on this interface${NC}"
+            HAS_MACVTAP=true
+        fi
+    fi
+fi
+
 # Download Ubuntu cloud image
 UBUNTU_IMAGE="${IMAGE_DIR}/ubuntu-${UBUNTU_VERSION}-server-cloudimg-amd64.img"
 if [ ! -f "$UBUNTU_IMAGE" ]; then
@@ -234,6 +268,26 @@ if [ "$HAS_AUDIO" = true ]; then
     rm "$AUDIO_TMP"
 fi
 
+# Add Macvtap LAN interface if selected
+if [ "$HAS_MACVTAP" = true ]; then
+    MACVTAP_INTERFACE="    <interface type='direct'>
+      <source dev='${SELECTED_NIC}' mode='bridge'/>
+      <model type='virtio'/>
+      <address type='pci' domain='0x0000' bus='0x09' slot='0x00' function='0x0'/>
+    </interface>"
+
+    MACVTAP_TMP=$(mktemp)
+    echo "$MACVTAP_INTERFACE" > "$MACVTAP_TMP"
+
+    sed -i '/<!-- Macvtap LAN Interface - REPLACE WITH YOUR NETWORK INTERFACE -->/,/-->/{
+      /<!-- Macvtap LAN Interface - REPLACE WITH YOUR NETWORK INTERFACE -->/r '"$MACVTAP_TMP"'
+      d
+    }' "$VM_XML"
+
+    rm "$MACVTAP_TMP"
+    echo -e "${GREEN}Macvtap interface configured on ${SELECTED_NIC}${NC}"
+fi
+
 # Enable IOMMU if needed
 if ! grep -q "iommu=pt" /proc/cmdline 2>/dev/null; then
     echo -e "\n${YELLOW}Warning: IOMMU may not be enabled in kernel parameters${NC}"
@@ -255,9 +309,15 @@ echo -e "VM Name: ${VM_NAME}"
 echo -e "Username: ${VM_USER}"
 echo -e "(Password: set during VM creation - not displayed for security)"
 echo -e ""
+echo -e "${GREEN}Network Configuration:${NC}"
+echo -e "  - NAT interface: 192.168.122.x (for host access)"
+if [ "$HAS_MACVTAP" = true ]; then
+    echo -e "  - Macvtap interface on ${SELECTED_NIC}: Will get LAN IP via DHCP"
+fi
+echo -e ""
 echo -e "Start the VM with: ${YELLOW}virsh start ${VM_NAME}${NC}"
 echo -e "Connect to console: ${YELLOW}virsh console ${VM_NAME}${NC}"
-echo -e "Get IP address: ${YELLOW}virsh domifaddr ${VM_NAME}${NC}"
+echo -e "Get IP addresses: ${YELLOW}virsh domifaddr ${VM_NAME}${NC}"
 echo -e ""
 echo -e "${YELLOW}Next steps:${NC}"
 echo -e "1. Start the VM: virsh start ${VM_NAME}"
