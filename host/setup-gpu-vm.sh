@@ -232,14 +232,67 @@ else
     VM_CREATED=false
 fi
 
-# Phase 6: SSH Key Setup (optional)
+# Phase 6: Start VM and Get IP Address
 if [ "$VM_CREATED" = true ]; then
-    print_step "Phase 6: SSH Key Setup (Optional)"
+    print_step "Phase 6: Starting VM and Waiting for Boot"
+
+    VM_NAME="forge-neo-gpu"
+
+    # Start the VM
+    if ! virsh list --state-running | grep -q "$VM_NAME"; then
+        echo "Starting VM..."
+        virsh start "$VM_NAME"
+        print_success "VM started"
+    else
+        print_success "VM is already running"
+    fi
+
+    # Wait for VM to get an IP address
+    echo "Waiting for VM to boot and get IP address (this takes ~2 minutes for cloud-init)..."
+    VM_IP=""
+    MAX_WAIT=90  # 3 minutes max
+    WAIT_COUNT=0
+
+    while [ -z "$VM_IP" ] && [ $WAIT_COUNT -lt $MAX_WAIT ]; do
+        VM_IP=$(virsh domifaddr "$VM_NAME" | grep -oP '192\.168\.\d+\.\d+' | head -1)
+        if [ -z "$VM_IP" ]; then
+            echo -n "."
+            sleep 2
+            WAIT_COUNT=$((WAIT_COUNT + 1))
+        fi
+    done
+    echo ""
+
+    if [ -z "$VM_IP" ]; then
+        print_warning "Could not get VM IP address after $((MAX_WAIT * 2)) seconds"
+        echo "The VM may still be booting. Check manually with: virsh domifaddr $VM_NAME"
+    else
+        print_success "VM is ready!"
+        echo -e "${GREEN}VM IP Address: ${YELLOW}$VM_IP${NC}"
+
+        # Wait a bit more for SSH to be available
+        echo "Waiting for SSH to be available..."
+        SSH_WAIT=30
+        SSH_COUNT=0
+        while [ $SSH_COUNT -lt $SSH_WAIT ]; do
+            if nc -z -w 2 "$VM_IP" 22 2>/dev/null; then
+                print_success "SSH is ready at $VM_IP"
+                break
+            fi
+            echo -n "."
+            sleep 2
+            SSH_COUNT=$((SSH_COUNT + 1))
+        done
+        echo ""
+    fi
+fi
+
+# Phase 7: SSH Key Setup (optional)
+if [ "$VM_CREATED" = true ] && [ -n "$VM_IP" ]; then
+    print_step "Phase 7: SSH Key Setup (Optional)"
 
     echo "Would you like to set up SSH key authentication for the VM?"
     echo "This will:"
-    echo "  - Start the VM if not running"
-    echo "  - Wait for it to get an IP address"
     echo "  - Add an entry to ~/.ssh/config"
     echo "  - Copy your SSH public key to the VM (ssh-copy-id)"
     echo ""
@@ -248,91 +301,40 @@ if [ "$VM_CREATED" = true ]; then
     if [[ $SETUP_SSH =~ ^[Yy]$ ]]; then
         VM_NAME="forge-neo-gpu"
 
-        # Check if VM is running
-        if ! virsh list --state-running | grep -q "$VM_NAME"; then
-            echo "Starting VM..."
-            virsh start "$VM_NAME"
-            sleep 5
-        fi
-
-        # Wait for VM to get an IP address
-        echo "Waiting for VM to get an IP address..."
-        VM_IP=""
-        MAX_WAIT=60
-        WAIT_COUNT=0
-
-        while [ -z "$VM_IP" ] && [ $WAIT_COUNT -lt $MAX_WAIT ]; do
-            VM_IP=$(virsh domifaddr "$VM_NAME" | grep -oP '192\.168\.\d+\.\d+' | head -1)
-            if [ -z "$VM_IP" ]; then
-                echo -n "."
-                sleep 2
-                WAIT_COUNT=$((WAIT_COUNT + 1))
-            fi
-        done
-        echo ""
-
-        if [ -z "$VM_IP" ]; then
-            print_error "Could not get VM IP address after $((MAX_WAIT * 2)) seconds"
-            echo "You can set up SSH keys manually later"
-        else
-            print_success "VM IP address: $VM_IP"
-
-            # Wait for SSH to be available
-            echo "Waiting for SSH to be available..."
-            MAX_SSH_WAIT=60
-            SSH_WAIT_COUNT=0
-
-            while [ $SSH_WAIT_COUNT -lt $MAX_SSH_WAIT ]; do
-                if nc -z -w 2 "$VM_IP" 22 2>/dev/null; then
-                    print_success "SSH is available"
-                    break
-                fi
-                echo -n "."
-                sleep 2
-                SSH_WAIT_COUNT=$((SSH_WAIT_COUNT + 1))
-            done
-            echo ""
-
-            if [ $SSH_WAIT_COUNT -ge $MAX_SSH_WAIT ]; then
-                print_error "SSH not available after $((MAX_SSH_WAIT * 2)) seconds"
-                echo "You can set up SSH keys manually later"
-            else
-                # Add to ~/.ssh/config if not already there
-                SSH_CONFIG="$HOME/.ssh/config"
-                SSH_CONFIG_ENTRY="Host $VM_NAME
+        # Add to ~/.ssh/config if not already there
+        SSH_CONFIG="$HOME/.ssh/config"
+        SSH_CONFIG_ENTRY="Host $VM_NAME
     HostName $VM_IP
     User ubuntu
     StrictHostKeyChecking no
     UserKnownHostsFile /dev/null"
 
-                if [ -f "$SSH_CONFIG" ] && grep -q "Host $VM_NAME" "$SSH_CONFIG"; then
-                    print_warning "SSH config entry for $VM_NAME already exists, skipping"
-                else
-                    echo "$SSH_CONFIG_ENTRY" >> "$SSH_CONFIG"
-                    print_success "Added $VM_NAME to ~/.ssh/config"
-                fi
+        if [ -f "$SSH_CONFIG" ] && grep -q "Host $VM_NAME" "$SSH_CONFIG"; then
+            print_warning "SSH config entry for $VM_NAME already exists, skipping"
+        else
+            echo "$SSH_CONFIG_ENTRY" >> "$SSH_CONFIG"
+            print_success "Added $VM_NAME to ~/.ssh/config"
+        fi
 
-                # Run ssh-copy-id
-                echo ""
-                echo "Copying SSH public key to VM..."
-                echo "You will be prompted for the VM password"
+        # Run ssh-copy-id
+        echo ""
+        echo "Copying SSH public key to VM..."
+        echo "You will be prompted for the VM password"
 
-                if [ -f "$HOME/.ssh/id_rsa.pub" ]; then
-                    ssh-copy-id -i "$HOME/.ssh/id_rsa.pub" "ubuntu@$VM_IP"
-                elif [ -f "$HOME/.ssh/id_ed25519.pub" ]; then
-                    ssh-copy-id -i "$HOME/.ssh/id_ed25519.pub" "ubuntu@$VM_IP"
-                else
-                    ssh-copy-id "ubuntu@$VM_IP"
-                fi
+        if [ -f "$HOME/.ssh/id_rsa.pub" ]; then
+            ssh-copy-id -i "$HOME/.ssh/id_rsa.pub" "ubuntu@$VM_IP"
+        elif [ -f "$HOME/.ssh/id_ed25519.pub" ]; then
+            ssh-copy-id -i "$HOME/.ssh/id_ed25519.pub" "ubuntu@$VM_IP"
+        else
+            ssh-copy-id "ubuntu@$VM_IP"
+        fi
 
-                if [ $? -eq 0 ]; then
-                    print_success "SSH key copied successfully!"
-                    echo ""
-                    echo "You can now SSH without password:"
-                    echo "  ssh $VM_NAME"
-                    echo "  (or: ssh ubuntu@$VM_IP)"
-                fi
-            fi
+        if [ $? -eq 0 ]; then
+            print_success "SSH key copied successfully!"
+            echo ""
+            echo "You can now SSH without password:"
+            echo "  ssh $VM_NAME"
+            echo "  (or: ssh ubuntu@$VM_IP)"
         fi
     fi
 fi
@@ -348,25 +350,33 @@ else
     echo -e "${YELLOW}⚠ VFIO needs configuration${NC}"
 fi
 if [ "$VM_CREATED" = true ]; then
-    echo -e "${GREEN}✓ VM created${NC}"
+    echo -e "${GREEN}✓ VM created and running${NC}"
+    if [ -n "$VM_IP" ]; then
+        echo -e "${GREEN}✓ VM IP Address: ${YELLOW}$VM_IP${NC}"
+    fi
 else
     echo -e "${YELLOW}⚠ VM not created${NC}"
 fi
 
 echo -e "\n${BLUE}Next Steps:${NC}\n"
 
-if [ "$VM_CREATED" = true ]; then
+if [ "$VM_CREATED" = true ] && [ -n "$VM_IP" ]; then
     echo "1. Deploy Forge Neo to the VM:"
     echo "   cd $SCRIPT_DIR"
     echo "   ./deploy-forge-to-vm.sh"
     echo ""
-    echo "2. Access Forge Neo WebUI (after deployment completes):"
-    echo "   http://<VM-IP>:7860"
+    echo "2. Or SSH to the VM manually:"
+    echo "   ssh ubuntu@$VM_IP"
     echo ""
-    echo "Alternative manual steps:"
-    echo "  - Check VM console: virsh console forge-neo-gpu"
-    echo "  - Get VM IP: virsh domifaddr forge-neo-gpu"
-    echo "  - SSH to VM: ssh <username>@<VM-IP>"
+    echo "3. After deployment, access Forge Neo WebUI at:"
+    echo "   http://$VM_IP:7860"
+elif [ "$VM_CREATED" = true ]; then
+    echo "1. Get VM IP address:"
+    echo "   virsh domifaddr forge-neo-gpu"
+    echo ""
+    echo "2. Deploy Forge Neo to the VM:"
+    echo "   cd $SCRIPT_DIR"
+    echo "   ./deploy-forge-to-vm.sh"
 else
     echo "1. Run this script again and choose to create the VM"
     echo "2. Or manually run: $SCRIPT_DIR/vm/create-vm.sh"
