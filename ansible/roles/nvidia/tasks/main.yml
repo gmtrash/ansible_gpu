@@ -11,36 +11,31 @@
   changed_when: false
   ignore_errors: yes
 
-- name: Remove any existing NVIDIA packages
-  ansible.builtin.apt:
-    name:
-      - 'nvidia-*'
-      - 'libnvidia-*'
-    state: absent
-    purge: yes
-    autoremove: yes
-  become: yes
-  ignore_errors: yes
-
-- name: Fix broken packages if any
+- name: Fix any broken packages first
   ansible.builtin.command: apt-get -f install -y
   become: yes
   changed_when: false
   ignore_errors: yes
 
-- name: Clean dpkg package database
-  ansible.builtin.command: dpkg --audit
-  become: yes
+- name: Check for broken NVIDIA packages
+  ansible.builtin.shell: dpkg -l | grep -i nvidia | grep -E '^.H|^.F' || true
+  register: broken_nvidia
   changed_when: false
-  ignore_errors: yes
-  register: dpkg_audit
+  become: yes
 
-- name: Display dpkg audit results
+- name: Display broken packages if any
   ansible.builtin.debug:
-    var: dpkg_audit.stdout_lines
-  when: dpkg_audit.stdout != ""
+    msg: "Broken NVIDIA packages detected: {{ broken_nvidia.stdout_lines }}"
+  when: broken_nvidia.stdout != ""
 
-- name: Clean apt cache
+- name: Remove broken NVIDIA packages only
+  ansible.builtin.shell: |
+    dpkg --remove --force-remove-reinstreq $(dpkg -l | grep -i nvidia | grep -E '^.H|^.F' | awk '{print $2}') || true
+  become: yes
+  when: broken_nvidia.stdout != ""
+  ignore_errors: yes
+
+- name: Clean apt cache and autoremove
   ansible.builtin.apt:
     autoclean: yes
     autoremove: yes
@@ -146,8 +141,13 @@
 
 - name: Display installed NVIDIA driver version
   ansible.builtin.debug:
-    msg: "Installed NVIDIA driver: {{ nvidia_verify.stdout_lines }}"
+    msg: "✓ Installed NVIDIA driver: {{ nvidia_verify.stdout_lines }}"
   when: nvidia_verify.rc == 0
+
+- name: Fail if NVIDIA driver not installed
+  ansible.builtin.fail:
+    msg: "✗ NVIDIA driver installation failed. Run guest/check-nvidia.sh for diagnostics."
+  when: nvidia_verify.rc != 0
 
 - name: Check if reboot is required
   ansible.builtin.stat:
@@ -156,7 +156,14 @@
 
 - name: Notify if reboot is needed
   ansible.builtin.debug:
-    msg: "REBOOT REQUIRED - System needs to be rebooted for NVIDIA drivers to take effect"
+    msg: |
+      ========================================
+      REBOOT REQUIRED
+      ========================================
+      System needs to be rebooted for NVIDIA drivers to take effect.
+
+      To reboot now: sudo reboot
+      ========================================
   when: reboot_required.stat.exists
 
 - name: Reboot if required (with confirmation)
