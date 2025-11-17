@@ -11,35 +11,46 @@
   changed_when: false
   ignore_errors: yes
 
-- name: Fix any broken packages first
+- name: Fix broken packages
   ansible.builtin.command: apt-get -f install -y
   become: yes
   changed_when: false
   ignore_errors: yes
 
-- name: Check for broken NVIDIA packages
-  ansible.builtin.shell: dpkg -l | grep -i nvidia | grep -E '^.H|^.F' || true
+- name: Check for problematic NVIDIA packages
+  ansible.builtin.shell: |
+    dpkg -l 2>/dev/null | grep -i nvidia | grep -v ^ii | awk '{print $2}' || echo ""
   register: broken_nvidia
   changed_when: false
   become: yes
 
-- name: Display broken packages if any
+- name: Display problematic packages
   ansible.builtin.debug:
-    msg: "Broken NVIDIA packages detected: {{ broken_nvidia.stdout_lines }}"
-  when: broken_nvidia.stdout != ""
+    msg: "Found non-installed NVIDIA packages: {{ broken_nvidia.stdout_lines }}"
+  when: broken_nvidia.stdout != "" and broken_nvidia.stdout_lines | length > 0
 
-- name: Remove broken NVIDIA packages only
-  ansible.builtin.shell: |
-    dpkg --remove --force-remove-reinstreq $(dpkg -l | grep -i nvidia | grep -E '^.H|^.F' | awk '{print $2}') || true
+- name: Purge problematic NVIDIA packages
+  ansible.builtin.apt:
+    name: "{{ broken_nvidia.stdout_lines }}"
+    state: absent
+    purge: yes
+    force: yes
   become: yes
-  when: broken_nvidia.stdout != ""
+  when: broken_nvidia.stdout != "" and broken_nvidia.stdout_lines | length > 0
   ignore_errors: yes
 
-- name: Clean apt cache and autoremove
+- name: Fix dependencies after purge
+  ansible.builtin.command: apt-get -f install -y
+  become: yes
+  changed_when: false
+  ignore_errors: yes
+
+- name: Clean package cache
   ansible.builtin.apt:
     autoclean: yes
     autoremove: yes
   become: yes
+  ignore_errors: yes
 
 - name: Install required system packages
   ansible.builtin.apt:
@@ -70,7 +81,11 @@
   register: nvidia_driver_version
   changed_when: false
 
-- name: Install NVIDIA driver
+- name: Display detected driver version
+  ansible.builtin.debug:
+    msg: "Detected NVIDIA driver: {{ nvidia_driver_version.stdout | default('None - will use fallback') }}"
+
+- name: Install NVIDIA driver (detected version)
   ansible.builtin.apt:
     name: "{{ nvidia_driver_version.stdout }}"
     state: present
@@ -82,15 +97,23 @@
   retries: 2
   delay: 10
   until: nvidia_install is succeeded
+  ignore_errors: yes
 
-- name: Fallback to nvidia-driver-550 if detection fails
+- name: Display driver install error if failed
+  ansible.builtin.debug:
+    msg: |
+      ⚠ Driver installation encountered issues:
+      {{ nvidia_install.msg | default('') }}
+  when: nvidia_driver_version.stdout != "" and nvidia_install.failed | default(false)
+
+- name: Install NVIDIA driver (fallback to 550)
   ansible.builtin.apt:
     name: nvidia-driver-550
     state: present
     install_recommends: yes
     dpkg_options: 'force-confold,force-confdef,force-overwrite'
   become: yes
-  when: nvidia_driver_version.stdout == ""
+  when: nvidia_driver_version.stdout == "" or (nvidia_install.failed | default(false))
   register: nvidia_fallback_install
   retries: 2
   delay: 10
@@ -133,21 +156,34 @@
     - 'export LD_LIBRARY_PATH=/usr/local/cuda-12.8/lib64:$LD_LIBRARY_PATH'
 
 - name: Verify NVIDIA driver installation
-  ansible.builtin.command: dpkg -l | grep -i nvidia-driver
+  ansible.builtin.shell: dpkg -l | grep -i nvidia-driver | grep ^ii || echo "No driver installed"
   become: yes
   changed_when: false
   register: nvidia_verify
+
+- name: Check if driver packages exist
+  ansible.builtin.shell: dpkg -l | grep -i nvidia-driver | grep -q ^ii
+  become: yes
+  changed_when: false
+  register: nvidia_check
   ignore_errors: yes
 
 - name: Display installed NVIDIA driver version
   ansible.builtin.debug:
-    msg: "✓ Installed NVIDIA driver: {{ nvidia_verify.stdout_lines }}"
-  when: nvidia_verify.rc == 0
+    msg: "✓ Installed NVIDIA driver packages: {{ nvidia_verify.stdout_lines }}"
+  when: nvidia_check.rc == 0
 
 - name: Fail if NVIDIA driver not installed
   ansible.builtin.fail:
-    msg: "✗ NVIDIA driver installation failed. Run guest/check-nvidia.sh for diagnostics."
-  when: nvidia_verify.rc != 0
+    msg: |
+      ✗ NVIDIA driver installation failed!
+
+      Debug steps:
+      1. SSH to VM: ssh {{ ansible_user }}@{{ inventory_hostname }}
+      2. Run: ./check-nvidia.sh
+      3. Check for errors: journalctl -xe
+      4. Try manual install: sudo apt install nvidia-driver-550
+  when: nvidia_check.rc != 0
 
 - name: Check if reboot is required
   ansible.builtin.stat:
