@@ -10,8 +10,9 @@ This repository automates the complete workflow for creating a GPU-accelerated S
 2. **VM Creation** - Creates Ubuntu 24.04 VM with GPU passthrough and dual networking
 3. **Software Deployment** - Installs NVIDIA drivers, CUDA 12.8, PyTorch, and Stable Diffusion Forge Neo
 4. **Service Setup** - Configures systemd service for automatic startup
+5. **File Sharing** - Sets up Samba shares for easy model uploads and output downloads
 
-**End Result:** A fully functional Stable Diffusion web UI accessible from your browser at `http://<vm-ip>:7860`
+**End Result:** A fully functional Stable Diffusion web UI at `http://<vm-ip>:7860` with network shares for file management
 
 ---
 
@@ -120,6 +121,7 @@ cd host
    - Installs PyTorch 2.7 with CUDA 12.8 support
    - Installs xformers, bitsandbytes, and dependencies
    - Creates and starts systemd service
+   - Configures Samba shares for models and outputs
 
 **Authentication:**
 - Tries SSH key first (if configured in Step 1)
@@ -224,6 +226,33 @@ Place model files in `/home/<username>/forge-neo/app/models/`:
 - [Civitai](https://civitai.com/models) - Community models and LoRAs
 - [HuggingFace](https://huggingface.co/models?pipeline_tag=text-to-image) - Official model repository
 
+### Access Files via Network Shares (Samba)
+
+The deployment automatically configures Samba shares for easy access to models and outputs from your local network.
+
+**Windows:**
+```
+\\<vm-ip>\forge-models     # Models directory
+\\<vm-ip>\forge-outputs    # Generated images
+```
+
+**Linux/Mac:**
+```
+smb://<vm-ip>/forge-models
+smb://<vm-ip>/forge-outputs
+```
+
+**Credentials:**
+- Username: Your VM username (set during VM creation)
+- Password: Your VM password (set during VM creation)
+
+**Usage:**
+- **Upload models:** Drag and drop `.safetensors` or `.ckpt` files to `forge-models`
+- **Download images:** Browse `forge-outputs` to retrieve generated images
+- **Organize:** Create subdirectories in models for checkpoints, LoRAs, VAEs, etc.
+
+**Note:** If you don't want Samba, set `samba_enabled: false` in `ansible/playbooks/site.yml` before deployment.
+
 ---
 
 ## Repository Structure
@@ -245,7 +274,8 @@ ansible_gpu/
     │   └── site.yml                  # Main playbook
     └── roles/
         ├── nvidia/                   # NVIDIA driver + CUDA installation
-        └── forge-neo/                # Forge Neo installation
+        ├── forge-neo/                # Forge Neo installation
+        └── samba/                    # Network file sharing
 ```
 
 ---

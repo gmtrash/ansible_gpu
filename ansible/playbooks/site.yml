@@ -15,6 +15,9 @@
     forge_enable_service: true
     forge_start_service: true
 
+    # Samba configuration
+    samba_enabled: true  # Set to false to skip Samba setup
+
   tasks:
     - name: Display target system information
       ansible.builtin.debug:
@@ -37,3 +40,7 @@
 
     - role: forge-neo
       tags: forge-neo
+
+    - role: samba
+      tags: samba
+      when: samba_enabled | default(true)

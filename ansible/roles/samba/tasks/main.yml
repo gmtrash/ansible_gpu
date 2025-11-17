@@ -1,0 +1,75 @@
+---
+- name: Install Samba
+  ansible.builtin.apt:
+    name:
+      - samba
+      - samba-common-bin
+    state: present
+    update_cache: yes
+  become: yes
+
+- name: Create Samba user (same password as system user)
+  ansible.builtin.shell: |
+    (echo "{{ ansible_password }}"; echo "{{ ansible_password }}") | smbpasswd -a {{ ansible_user }} -s
+  become: yes
+  changed_when: false
+  no_log: true
+
+- name: Enable Samba user
+  ansible.builtin.shell: smbpasswd -e {{ ansible_user }}
+  become: yes
+  changed_when: false
+
+- name: Ensure forge directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: '0755'
+  loop:
+    - "{{ forge_install_dir }}/app/models"
+    - "{{ forge_install_dir }}/app/outputs"
+
+- name: Deploy Samba configuration
+  ansible.builtin.template:
+    src: smb.conf.j2
+    dest: /etc/samba/smb.conf
+    owner: root
+    group: root
+    mode: '0644'
+    validate: 'testparm -s %s'
+  become: yes
+  notify: restart samba
+
+- name: Start and enable Samba services
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: started
+    enabled: yes
+  become: yes
+  loop:
+    - smbd
+    - nmbd
+
+- name: Display Samba access information
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      Samba Shares Configured
+      ========================================
+
+      Access from Windows:
+        \\{{ ansible_default_ipv4.address }}\forge-models
+        \\{{ ansible_default_ipv4.address }}\forge-outputs
+
+      Access from Linux/Mac:
+        smb://{{ ansible_default_ipv4.address }}/forge-models
+        smb://{{ ansible_default_ipv4.address }}/forge-outputs
+
+      Username: {{ ansible_user }}
+      Password: (your VM password)
+
+      Models directory: {{ forge_install_dir }}/app/models
+      Outputs directory: {{ forge_install_dir }}/app/outputs
+      ========================================
