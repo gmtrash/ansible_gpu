@@ -182,6 +182,14 @@
     owner: "{{ ansible_user }}"
     group: "{{ ansible_user }}"
 
+- name: Copy diagnostic script
+  ansible.builtin.copy:
+    src: diagnose-forge.sh
+    dest: "{{ forge_install_dir }}/diagnose-forge.sh"
+    mode: '0755'
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+
 - name: Run CUDA verification test (with venv activated)
   ansible.builtin.shell: |
     source venv/bin/activate
@@ -231,3 +239,8 @@
 
       CUDA Verification: PASSED ✓
       PyTorch with CUDA support is working correctly!
+
+      Troubleshooting tools:
+      - Diagnostic script: {{ forge_install_dir }}/diagnose-forge.sh
+      - CUDA test: cd {{ forge_install_dir }}/app && source venv/bin/activate && python3 test_cuda.py
+      - Service logs: sudo journalctl -u forge-neo -f

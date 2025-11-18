@@ -346,6 +346,66 @@ sudo journalctl -u forge-neo -n 50
 - First launch installing dependencies: Wait 5-10 minutes for initial setup
 - Firewall blocking port 7860: Check VM firewall with `sudo ufw status`
 
+### Connection Errored Out During Generation
+
+**Symptoms:** Web UI loads but shows "Connection errored out" when trying to generate images
+
+**Debugging:**
+```bash
+# SSH to VM
+ssh <username>@<vm-ip>
+
+# Run the diagnostic script
+cd ~/forge-neo
+./diagnose-forge.sh
+```
+
+The diagnostic script will check:
+- Service status and recent logs
+- PyTorch and CUDA availability
+- GPU memory and utilization
+- Recent errors and exceptions
+
+**Common causes and fixes:**
+
+1. **Backend process crashing:**
+   ```bash
+   # View real-time logs to see the crash
+   sudo journalctl -u forge-neo -f
+
+   # Look for "CUDA out of memory" or "RuntimeError"
+   ```
+
+2. **CUDA out of memory:**
+   - Try generating smaller images (512x512 instead of 1024x1024)
+   - Reduce batch size to 1
+   - Enable "Low VRAM" mode in Settings
+   - Check GPU memory: `nvidia-smi`
+
+3. **Service keeps restarting:**
+   ```bash
+   # Restart the service with daemon-reload
+   sudo systemctl daemon-reload
+   sudo systemctl restart forge-neo
+
+   # If that doesn't work, test manually
+   cd ~/forge-neo/app
+   source venv/bin/activate
+   python3 launch.py --listen --port 7860
+   ```
+
+4. **PyTorch/CUDA import errors:**
+   ```bash
+   # Run CUDA verification test
+   cd ~/forge-neo/app
+   source venv/bin/activate
+   python3 test_cuda.py
+   ```
+
+5. **Extensions causing issues:**
+   - Try disabling extensions one by one in the web UI
+   - Check `~/forge-neo/app/extensions/` for problematic extensions
+
 ### NVIDIA Driver Installation Fails
 
 **Symptoms:** Ansible playbook fails at "Install NVIDIA drivers" task

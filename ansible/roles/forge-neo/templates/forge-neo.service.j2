@@ -9,11 +9,18 @@ WorkingDirectory={{ forge_install_dir }}/app
 Environment="VIRTUAL_ENV={{ forge_install_dir }}/app/venv"
 Environment="PATH={{ forge_install_dir }}/app/venv/bin:{{ ansible_env.HOME }}/.cargo/bin:/usr/local/cuda-12.8/bin:{{ ansible_env.PATH }}"
 Environment="LD_LIBRARY_PATH=/usr/local/cuda-12.8/lib64"
-ExecStart={{ forge_install_dir }}/app/venv/bin/python3 launch.py --listen --port 7860
+Environment="CUDA_HOME=/usr/local/cuda-12.8"
+Environment="PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512"
+Environment="PYTHONUNBUFFERED=1"
+ExecStart={{ forge_install_dir }}/app/venv/bin/python3 launch.py --listen --port 7860 --enable-insecure-extension-access
 Restart=on-failure
 RestartSec=10
+StartLimitInterval=200
+StartLimitBurst=5
+TimeoutStartSec=300
 StandardOutput=journal
 StandardError=journal
+SyslogIdentifier=forge-neo
 
 [Install]
 WantedBy=multi-user.target
