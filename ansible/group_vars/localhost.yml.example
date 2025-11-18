@@ -53,9 +53,9 @@ forge_repo_url: "https://github.com/6Morpheus6/forge-neo"
 forge_branch: "main"
 forge_install_dir: "{{ home_dir }}/llm/sd-webui-forge"
 
-# Conda environment
-forge_conda_env: "forge-cuda"
+# Python version for forge-neo venv
 # Python 3.12.x is supported and tested (despite upstream warning for 3.11.9)
+# Forge-neo will create its own venv using this Python version
 forge_python_version: "3.12"
 
 # Model directories
@@ -130,8 +130,8 @@ custom_bash_aliases:
   - alias l='ls -CF'
   - alias gpu='nvidia-smi'
   - alias gpuw='watch -n 1 nvidia-smi'
-  - alias forge='cd {{ forge_install_dir }} && conda activate {{ forge_conda_env }}'
-  - alias forge-launch='cd {{ forge_install_dir }} && ./launch-cuda.sh'
+  - alias forge='cd {{ forge_install_dir }}'
+  - alias forge-launch='cd {{ forge_install_dir }} && ./webui.sh'
 
 # Custom bash exports
 custom_bash_exports:

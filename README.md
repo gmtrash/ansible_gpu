@@ -154,20 +154,19 @@ cp group_vars/localhost.yml.example group_vars/localhost.yml
 
 # 3. Run deployment
 ./standalone/quick-start.sh
-# Installs: NVIDIA drivers, CUDA 12.6, Conda, Forge, PyTorch, ML packages
+# Installs: NVIDIA drivers, CUDA 12.6, Python 3.12, Forge Neo setup
 
 # 4. Reboot
 sudo reboot
 
 # 5. Launch Forge
-conda activate forge-cuda
 forge-launch  # Access at http://localhost:7860
 ```
 
 **What you get:**
 - NVIDIA drivers (550+) + CUDA Toolkit
-- Conda environment with PyTorch + CUDA
-- Stable Diffusion Forge repository
+- Python 3.12 venv with PyTorch + CUDA
+- Stable Diffusion Forge Neo repository
 - Desktop shortcuts and bash aliases
 - Optional systemd service
 
@@ -365,13 +364,13 @@ bash webui.sh
 - NVIDIA drivers (550+ from graphics-drivers PPA)
 - CUDA Toolkit (12.6+)
 - cuDNN for deep learning
-- Conda/Miniforge environment manager
-- Stable Diffusion Forge repository
-- PyTorch with CUDA support (cu121)
-- ML dependencies (gradio, transformers, accelerate, etc.)
-- Conda environment: `forge-cuda` with Python 3.11
+- Python 3.12 with venv support
+- Stable Diffusion Forge Neo repository
+- PyTorch with CUDA support (automatically installed by Forge)
+- ML dependencies (automatically managed by Forge launch script)
+- Python venv at `~/llm/sd-webui-forge/venv`
 - Desktop shortcuts and bash aliases
-- Launch scripts (`forge-launch`, etc.)
+- Launch scripts (`forge-launch`, `webui.sh`)
 - Optional systemd service
 </details>
 
@@ -401,9 +400,9 @@ bash webui.sh
 
 ### ML/AI Stack
 - ✅ **Latest NVIDIA drivers** and CUDA toolkit
-- ✅ **PyTorch with CUDA** support
-- ✅ **Stable Diffusion Forge** pre-configured
-- ✅ **Conda environment** management
+- ✅ **PyTorch with CUDA** support (auto-installed)
+- ✅ **Stable Diffusion Forge Neo** pre-configured
+- ✅ **Python venv** with automatic dependency management
 
 ---
 

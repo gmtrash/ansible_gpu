@@ -1,0 +1,12 @@
+---
+# Handlers for forge-cuda role
+
+- name: reload systemd
+  systemd:
+    daemon_reload: yes
+
+- name: restart forge-neo
+  systemd:
+    name: forge-neo
+    state: restarted
+  when: create_forge_service | default(false)

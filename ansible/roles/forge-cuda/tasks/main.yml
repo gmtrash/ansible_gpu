@@ -1,5 +1,5 @@
 ---
-# Stable Diffusion WebUI Forge - CUDA setup
+# Stable Diffusion WebUI Forge - CUDA setup (venv-based)
 
 - name: Ensure parent directory exists
   file:
@@ -37,83 +37,81 @@
   when: forge_repo_exists.stat.exists
   tags: forge
 
-- name: Check if forge conda environment exists
-  shell: "{{ conda_install_dir }}/bin/conda env list | grep -q '^{{ forge_conda_env }} '"
-  register: forge_env_exists
-  failed_when: false
-  changed_when: false
-  become_user: "{{ username }}"
+- name: Ensure Python {{ forge_python_version }} is installed
+  apt:
+    name:
+      - python{{ forge_python_version }}
+      - python{{ forge_python_version }}-venv
+      - python{{ forge_python_version }}-dev
+    state: present
   tags: forge
 
-- name: Create forge conda environment with Python
-  shell: "{{ conda_install_dir }}/bin/conda create -n {{ forge_conda_env }} python={{ forge_python_version }} -y"
-  become_user: "{{ username }}"
-  when: forge_env_exists.rc != 0
-  tags: forge
-
-- name: Install PyTorch with CUDA support in forge environment
-  shell: |
-    source {{ conda_install_dir }}/etc/profile.d/conda.sh
-    conda activate {{ forge_conda_env }}
-    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-  become_user: "{{ username }}"
-  args:
-    executable: /bin/bash
-  when: forge_env_exists.rc != 0
-  tags: forge
-
-- name: Install additional Python packages for Forge
-  shell: |
-    source {{ conda_install_dir }}/etc/profile.d/conda.sh
-    conda activate {{ forge_conda_env }}
-    pip install gradio pillow opencv-python numpy scipy accelerate safetensors transformers
-  become_user: "{{ username }}"
-  args:
-    executable: /bin/bash
-  when: forge_env_exists.rc != 0
-  tags: forge
-
-- name: Create webui-user.sh launch script
+- name: Create webui-user.sh configuration file
   copy:
     dest: "{{ forge_install_dir }}/webui-user.sh"
     content: |
       #!/bin/bash
-      # Forge WebUI launch script for CUDA
+      # Forge WebUI user configuration
 
       # Command-line arguments
       export COMMANDLINE_ARGS="{{ forge_commandline_args }}"
 
-      # Python executable from conda environment
-      export python_cmd="{{ conda_install_dir }}/envs/{{ forge_conda_env }}/bin/python"
+      # Use Python {{ forge_python_version }}
+      export python_cmd="python{{ forge_python_version }}"
 
-      # Disable auto-venv (we're using conda)
-      export LAUNCH_SCRIPT="{{ forge_install_dir }}/launch.py"
+      # venv directory (forge-neo creates this automatically)
+      export VENV_DIR="{{ forge_install_dir }}/venv"
     owner: "{{ username }}"
     group: "{{ user_group }}"
     mode: '0755'
   tags: forge
 
-- name: Create custom launch script with conda activation
+- name: Create webui.sh launch script
   copy:
-    dest: "{{ forge_install_dir }}/launch-cuda.sh"
+    dest: "{{ forge_install_dir }}/webui.sh"
     content: |
       #!/bin/bash
-      # Auto-generated launch script with conda activation
+      # Forge WebUI launch script for Linux
 
-      # Source conda
-      source "{{ conda_install_dir }}/etc/profile.d/conda.sh"
+      # Get the directory where this script is located
+      SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+      cd "$SCRIPT_DIR" || exit 1
 
-      # Activate environment
-      conda activate {{ forge_conda_env }}
+      # Load user configuration
+      if [ -f webui-user.sh ]; then
+          source webui-user.sh
+      fi
 
-      # Source CUDA environment
+      # Set defaults if not configured
+      export COMMANDLINE_ARGS="${COMMANDLINE_ARGS:-}"
+      export python_cmd="${python_cmd:-python3}"
+      export VENV_DIR="${VENV_DIR:-venv}"
+
+      # Check if venv exists, create if not
+      if [ ! -d "$VENV_DIR" ]; then
+          echo "Creating Python virtual environment in $VENV_DIR..."
+          $python_cmd -m venv "$VENV_DIR"
+          if [ $? -ne 0 ]; then
+              echo "Failed to create virtual environment"
+              exit 1
+          fi
+
+          # Upgrade pip
+          echo "Upgrading pip..."
+          "$VENV_DIR/bin/python" -m pip install --upgrade pip
+      fi
+
+      # Activate venv
+      source "$VENV_DIR/bin/activate"
+
+      # Source CUDA environment if available
       if [ -f /etc/profile.d/cuda.sh ]; then
           source /etc/profile.d/cuda.sh
       fi
 
-      # Launch WebUI
-      cd {{ forge_install_dir }}
-      exec bash webui.sh "$@"
+      # Launch WebUI (let launch.py handle dependency installation)
+      echo "Launching Forge WebUI..."
+      python launch.py "$@"
     owner: "{{ username }}"
     group: "{{ user_group }}"
     mode: '0755'
@@ -149,14 +147,14 @@
 
 - name: Create desktop launcher (optional)
   copy:
-    dest: "{{ home_dir }}/.local/share/applications/forge-cuda.desktop"
+    dest: "{{ home_dir }}/.local/share/applications/forge-neo.desktop"
     content: |
       [Desktop Entry]
       Version=1.0
       Type=Application
-      Name=Stable Diffusion Forge (CUDA)
+      Name=Stable Diffusion Forge Neo
       Comment=Launch Stable Diffusion WebUI Forge with CUDA
-      Exec={{ forge_install_dir }}/launch-cuda.sh
+      Exec={{ forge_install_dir }}/webui.sh
       Icon=applications-graphics
       Terminal=true
       Categories=Graphics;
@@ -166,43 +164,25 @@
   when: configure_desktop | default(true)
   tags: forge
 
-- name: Verify PyTorch CUDA in forge environment
-  shell: |
-    source {{ conda_install_dir }}/etc/profile.d/conda.sh
-    conda activate {{ forge_conda_env }}
-    python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}'); print(f'CUDA version: {torch.version.cuda if torch.cuda.is_available() else \"N/A\"}')"
-  register: pytorch_verify
-  changed_when: false
-  failed_when: false
-  become_user: "{{ username }}"
-  args:
-    executable: /bin/bash
-  tags: forge
-
-- name: Display PyTorch verification
-  debug:
-    msg: "{{ pytorch_verify.stdout_lines }}"
-  when: pytorch_verify.rc == 0
-  tags: forge
-
-- name: Warn if PyTorch CUDA verification failed
-  debug:
-    msg:
-      - "WARNING: PyTorch CUDA verification failed"
-      - "This may be normal if NVIDIA driver installation requires a reboot"
-      - "Reboot and run verification again"
-  when: pytorch_verify.rc != 0
+- name: Create systemd service file (if requested)
+  template:
+    src: forge-neo.service.j2
+    dest: /etc/systemd/system/forge-neo.service
+    mode: '0644'
+  when: create_forge_service | default(false)
+  notify: reload systemd
   tags: forge
 
 - name: Create Forge information file
   copy:
-    dest: "{{ home_dir }}/.forge-cuda-info"
+    dest: "{{ home_dir }}/.forge-neo-info"
     content: |
-      # Stable Diffusion WebUI Forge - CUDA Edition
+      # Stable Diffusion WebUI Forge Neo - CUDA Edition
       # Generated by Ansible on {{ ansible_date_time.iso8601 }}
 
       Installation Directory: {{ forge_install_dir }}
-      Conda Environment: {{ forge_conda_env }}
+      Python Version: {{ forge_python_version }}
+      Venv Directory: {{ forge_install_dir }}/venv
       Model Directory: {{ forge_models_dir }}
       {% if shared_models_dir is defined %}
       Shared Models: {{ shared_models_dir }}
@@ -210,11 +190,8 @@
 
       ## Quick Start
 
-      # Activate environment:
-      conda activate {{ forge_conda_env }}
-
       # Launch WebUI:
-      {{ forge_install_dir }}/launch-cuda.sh
+      {{ forge_install_dir }}/webui.sh
 
       # Or navigate and launch:
       cd {{ forge_install_dir }}
@@ -226,11 +203,22 @@
       ## Troubleshooting
       - Check NVIDIA: nvidia-smi
       - Check CUDA: nvcc --version
-      - Check PyTorch: python -c "import torch; print(torch.cuda.is_available())"
+      - Check PyTorch (from venv):
+        source {{ forge_install_dir }}/venv/bin/activate
+        python -c "import torch; print(torch.cuda.is_available())"
       - See Forge documentation for more help
 
       ## Performance Tips
       - Command-line args: {{ forge_commandline_args }}
+
+      ## First Launch
+      The first launch will take several minutes as forge-neo:
+      1. Creates the Python venv
+      2. Downloads and installs PyTorch with CUDA support
+      3. Installs all required dependencies
+      4. Sets up the WebUI
+
+      Subsequent launches will be much faster.
     owner: "{{ username }}"
     group: "{{ user_group }}"
     mode: '0644'
