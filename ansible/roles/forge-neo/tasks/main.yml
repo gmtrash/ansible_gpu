@@ -14,10 +14,10 @@
 - name: Install system dependencies
   ansible.builtin.apt:
     name:
-      - software-properties-common
       - git
       - wget
       - curl
+      - bzip2
       - libgl1
       - libglib2.0-0
       - libsm6
@@ -29,23 +29,37 @@
     update_cache: yes
   become: yes
 
-- name: Add deadsnakes PPA for Python 3.11
-  ansible.builtin.apt_repository:
-    repo: ppa:deadsnakes/ppa
-    state: present
-    update_cache: yes
-  become: yes
+- name: Check if miniconda is already installed
+  ansible.builtin.stat:
+    path: "{{ ansible_env.HOME }}/miniconda3/bin/conda"
+  register: conda_installed
 
-- name: Install Python 3.11 and related packages
-  ansible.builtin.apt:
-    name:
-      - python3.11
-      - python3.11-venv
-      - python3.11-dev
-      - python3-pip
-    state: present
-    update_cache: yes
-  become: yes
+- name: Download miniconda installer
+  ansible.builtin.get_url:
+    url: https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+    dest: /tmp/miniconda-installer.sh
+    mode: '0755'
+  when: not conda_installed.stat.exists
+
+- name: Install miniconda
+  ansible.builtin.shell: |
+    bash /tmp/miniconda-installer.sh -b -p {{ ansible_env.HOME }}/miniconda3
+  when: not conda_installed.stat.exists
+
+- name: Initialize conda for bash
+  ansible.builtin.shell: |
+    {{ ansible_env.HOME }}/miniconda3/bin/conda init bash
+  args:
+    creates: "{{ ansible_env.HOME }}/.bashrc"
+  when: not conda_installed.stat.exists
+
+- name: Install Python 3.11.9 via conda
+  ansible.builtin.shell: |
+    {{ ansible_env.HOME }}/miniconda3/bin/conda install -y python=3.11.9
+  args:
+    creates: "{{ ansible_env.HOME }}/miniconda3/bin/python3.11"
+  environment:
+    PATH: "{{ ansible_env.HOME }}/miniconda3/bin:{{ ansible_env.PATH }}"
 
 - name: Create forge-neo installation directory
   ansible.builtin.file:
@@ -62,9 +76,9 @@
     version: neo
     force: no
 
-- name: Create Python virtual environment with Python 3.11
+- name: Create Python virtual environment with Python 3.11 from conda
   ansible.builtin.command:
-    cmd: python3.11 -m venv venv
+    cmd: "{{ ansible_env.HOME }}/miniconda3/bin/python3.11 -m venv venv"
     chdir: "{{ forge_install_dir }}/app"
     creates: "{{ forge_install_dir }}/app/venv"
 
@@ -76,7 +90,7 @@
       - setuptools
     state: latest
     virtualenv: "{{ forge_install_dir }}/app/venv"
-    virtualenv_python: python3.11
+    virtualenv_python: "{{ ansible_env.HOME }}/miniconda3/bin/python3.11"
 
 - name: Install PyTorch with CUDA 12.8 support
   ansible.builtin.pip:
@@ -87,14 +101,14 @@
       - xformers==0.0.30
     extra_args: "--index-url https://download.pytorch.org/whl/cu128"
     virtualenv: "{{ forge_install_dir }}/app/venv"
-    virtualenv_python: python3.11
+    virtualenv_python: "{{ ansible_env.HOME }}/miniconda3/bin/python3.11"
 
 - name: Install bitsandbytes
   ansible.builtin.pip:
     name: bitsandbytes
     state: latest
     virtualenv: "{{ forge_install_dir }}/app/venv"
-    virtualenv_python: python3.11
+    virtualenv_python: "{{ ansible_env.HOME }}/miniconda3/bin/python3.11"
 
 - name: Install additional ML packages and download tools
   ansible.builtin.pip:
@@ -103,7 +117,7 @@
       - hf-xet
       - huggingface-hub
     virtualenv: "{{ forge_install_dir }}/app/venv"
-    virtualenv_python: python3.11
+    virtualenv_python: "{{ ansible_env.HOME }}/miniconda3/bin/python3.11"
 
 - name: Check if webui launch script exists
   ansible.builtin.stat:
