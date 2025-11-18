@@ -1,0 +1,89 @@
+---
+- name: Wait for apt locks
+  ansible.builtin.shell: |
+    while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || \
+          fuser /var/lib/dpkg/lock >/dev/null 2>&1 || \
+          fuser /var/cache/apt/archives/lock >/dev/null 2>&1; do
+      echo "Waiting for apt locks..."
+      sleep 2
+    done
+  become: yes
+  changed_when: false
+  timeout: 300
+
+- name: Install Samba
+  ansible.builtin.apt:
+    name:
+      - samba
+      - samba-common-bin
+    state: present
+    update_cache: yes
+  become: yes
+
+- name: Create Samba user (same password as system user)
+  ansible.builtin.shell: |
+    (echo "{{ ansible_password }}"; echo "{{ ansible_password }}") | smbpasswd -a {{ ansible_user }} -s
+  become: yes
+  changed_when: false
+  no_log: true
+
+- name: Enable Samba user
+  ansible.builtin.shell: smbpasswd -e {{ ansible_user }}
+  become: yes
+  changed_when: false
+
+- name: Ensure forge app directory exists
+  ansible.builtin.file:
+    path: "{{ forge_install_dir }}/app"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: '0755'
+
+- name: Deploy Samba configuration
+  ansible.builtin.template:
+    src: smb.conf.j2
+    dest: /etc/samba/smb.conf
+    owner: root
+    group: root
+    mode: '0644'
+    validate: 'testparm -s %s'
+  become: yes
+  notify: restart samba
+
+- name: Start and enable Samba services
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: started
+    enabled: yes
+  become: yes
+  loop:
+    - smbd
+    - nmbd
+
+- name: Display Samba access information
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      Samba Share Configured
+      ========================================
+
+      Access from Windows:
+        \\{{ ansible_default_ipv4.address }}\forge-neo
+
+      Access from Linux/Mac:
+        smb://{{ ansible_default_ipv4.address }}/forge-neo
+
+      Username: {{ ansible_user }}
+      Password: (your VM password)
+
+      Shared directory: {{ forge_install_dir }}/app
+      Contains:
+        - models/          (upload checkpoints, LoRAs, VAEs here)
+        - outputs/         (generated images)
+        - logs/            (web UI error logs if any)
+        - extensions/      (installed extensions)
+        - webui.log        (main application log)
+
+      Web UI logs also available via: sudo journalctl -u forge-neo -f
+      ========================================

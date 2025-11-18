@@ -7,9 +7,6 @@ VM_MEMORY="16384"  # 16GB in MB
 VM_VCPUS="8"
 DISK_SIZE="100G"
 UBUNTU_VERSION="24.04"
-IMAGE_DIR="/var/lib/libvirt/images"
-VM_DISK="${IMAGE_DIR}/${VM_NAME}.qcow2"
-CLOUD_INIT_ISO="${IMAGE_DIR}/${VM_NAME}-cloud-init.iso"
 
 # Colors for output
 RED='\033[0;31m'
@@ -19,11 +16,53 @@ NC='\033[0m' # No Color
 
 echo -e "${GREEN}=== Forge Neo GPU VM Creation Script ===${NC}\n"
 
-# Check if running as root
-if [[ $EUID -ne 0 ]]; then
-   echo -e "${RED}Error: This script must be run as root${NC}"
+# Check if user is in libvirt group
+if ! groups | grep -q libvirt; then
+   echo -e "${RED}Error: You must be in the 'libvirt' group${NC}"
+   echo -e "Run: sudo usermod -aG libvirt $USER"
+   echo -e "Then log out and back in, or run: newgrp libvirt"
    exit 1
 fi
+
+# Ask for VM storage directory
+echo -e "${YELLOW}VM Storage Location${NC}"
+echo "Where would you like to store VM disk images?"
+DEFAULT_IMAGE_DIR="$HOME/libvirt/images"
+read -p "Enter directory path [${DEFAULT_IMAGE_DIR}]: " IMAGE_DIR
+IMAGE_DIR=${IMAGE_DIR:-$DEFAULT_IMAGE_DIR}
+
+# Expand tilde if present
+IMAGE_DIR="${IMAGE_DIR/#\~/$HOME}"
+
+# Create directory if it doesn't exist
+if [ ! -d "$IMAGE_DIR" ]; then
+    echo -e "${YELLOW}Creating directory: $IMAGE_DIR${NC}"
+    mkdir -p "$IMAGE_DIR"
+    echo -e "${GREEN}✓ Directory created${NC}"
+else
+    echo -e "${GREEN}✓ Using existing directory: $IMAGE_DIR${NC}"
+fi
+
+# Set proper permissions for libvirt access
+echo -e "${YELLOW}Setting permissions for libvirt access...${NC}"
+
+# Make parent directories executable so libvirt-qemu can traverse them
+# This allows libvirt to access files in user home directories
+chmod o+x "$HOME" 2>/dev/null || true
+PARENT_DIR=$(dirname "$IMAGE_DIR")
+while [ "$PARENT_DIR" != "$HOME" ] && [ "$PARENT_DIR" != "/" ]; do
+    chmod o+x "$PARENT_DIR" 2>/dev/null || true
+    PARENT_DIR=$(dirname "$PARENT_DIR")
+done
+
+# Make the storage directory readable and executable by libvirt
+chmod 755 "$IMAGE_DIR"
+
+echo -e "${GREEN}✓ Permissions configured${NC}"
+
+VM_DISK="${IMAGE_DIR}/${VM_NAME}.qcow2"
+CLOUD_INIT_ISO="${IMAGE_DIR}/${VM_NAME}-cloud-init.iso"
+echo ""
 
 # Check for required tools
 for cmd in virsh virt-install qemu-img wget cloud-localds; do
@@ -86,15 +125,53 @@ else
     HAS_AUDIO=false
 fi
 
+# Detect network interfaces for Macvtap (LAN access)
+echo -e "\n${YELLOW}Detecting network interfaces for LAN access (Macvtap)...${NC}"
+
+# Get list of physical network interfaces (exclude lo, virbr, docker, etc.)
+INTERFACES=$(ls /sys/class/net/ | grep -v -E '^(lo|virbr|docker|veth)' || true)
+
+if [ -z "$INTERFACES" ]; then
+    echo -e "${YELLOW}No physical network interfaces found${NC}"
+    echo -e "${YELLOW}VM will only have NAT access (192.168.122.x)${NC}"
+    HAS_MACVTAP=false
+else
+    echo -e "${GREEN}Available network interfaces:${NC}"
+    echo "$INTERFACES" | nl -w2 -s'. '
+    echo -e "${YELLOW}Note: Macvtap will allow VM to get IP from LAN DHCP${NC}"
+
+    read -p "Enter interface number for LAN access (or press Enter to skip): " NIC_SELECTION
+
+    if [ -z "$NIC_SELECTION" ]; then
+        echo -e "${YELLOW}Skipping Macvtap - VM will only have NAT access${NC}"
+        HAS_MACVTAP=false
+    else
+        SELECTED_NIC=$(echo "$INTERFACES" | sed -n "${NIC_SELECTION}p")
+
+        if [ -z "$SELECTED_NIC" ]; then
+            echo -e "${YELLOW}Invalid selection - skipping Macvtap${NC}"
+            HAS_MACVTAP=false
+        else
+            echo -e "${GREEN}Selected network interface: $SELECTED_NIC${NC}"
+            echo -e "${GREEN}VM will get LAN IP via DHCP on this interface${NC}"
+            HAS_MACVTAP=true
+        fi
+    fi
+fi
+
 # Download Ubuntu cloud image
 UBUNTU_IMAGE="${IMAGE_DIR}/ubuntu-${UBUNTU_VERSION}-server-cloudimg-amd64.img"
 if [ ! -f "$UBUNTU_IMAGE" ]; then
     echo -e "\n${YELLOW}Downloading Ubuntu ${UBUNTU_VERSION} cloud image...${NC}"
     wget -O "$UBUNTU_IMAGE" \
         "https://cloud-images.ubuntu.com/releases/${UBUNTU_VERSION}/release/ubuntu-${UBUNTU_VERSION}-server-cloudimg-amd64.img"
+    chmod 644 "$UBUNTU_IMAGE"
 else
     echo -e "${GREEN}Ubuntu image already exists${NC}"
 fi
+
+# Ensure base image is readable
+chmod 644 "$UBUNTU_IMAGE" 2>/dev/null || true
 
 # Create VM disk
 echo -e "\n${YELLOW}Creating VM disk (${DISK_SIZE})...${NC}"
@@ -110,11 +187,16 @@ else
     qemu-img create -f qcow2 -F qcow2 -b "$UBUNTU_IMAGE" "$VM_DISK" "$DISK_SIZE"
 fi
 
+# Set permissions on the disk image so libvirt can access it
+chmod 644 "$VM_DISK"
+echo -e "${GREEN}✓ Disk permissions set${NC}"
+
 # Get user details for VM
 read -p "Enter username for VM [ubuntu]: " VM_USER
 VM_USER=${VM_USER:-ubuntu}
 
-read -p "Enter password for VM [ubuntu]: " VM_PASSWORD
+read -sp "Enter password for VM [ubuntu]: " VM_PASSWORD
+echo  # Print newline after hidden password input
 VM_PASSWORD=${VM_PASSWORD:-ubuntu}
 
 read -p "Enter VM hostname [forge-neo]: " VM_HOSTNAME
@@ -140,6 +222,10 @@ users:
     lock_passwd: false
     passwd: $(echo "$VM_PASSWORD" | openssl passwd -6 -stdin)
 
+# Enable SSH password authentication for Ansible
+ssh_pwauth: true
+disable_root: true
+
 package_update: true
 package_upgrade: true
 
@@ -150,10 +236,30 @@ packages:
   - git
   - curl
   - wget
+  - openssh-server
+
+# Configure all network interfaces with netplan
+write_files:
+  - path: /etc/netplan/99-all-interfaces.yaml
+    content: |
+      network:
+        version: 2
+        ethernets:
+          enp1s0:
+            dhcp4: true
+            dhcp6: true
+          enp9s0:
+            dhcp4: true
+            dhcp6: true
+            optional: true
+    permissions: '0600'
 
 runcmd:
+  - netplan apply
   - systemctl enable qemu-guest-agent
   - systemctl start qemu-guest-agent
+  - systemctl enable ssh
+  - systemctl start ssh
 
 power_state:
   mode: reboot
@@ -164,6 +270,9 @@ EOF
 # Create cloud-init ISO
 cloud-localds "$CLOUD_INIT_ISO" "${CLOUD_INIT_DIR}/user-data" "${CLOUD_INIT_DIR}/meta-data"
 rm -rf "$CLOUD_INIT_DIR"
+
+# Set permissions on cloud-init ISO so libvirt can access it
+chmod 644 "$CLOUD_INIT_ISO"
 
 echo -e "${GREEN}Cloud-init ISO created${NC}"
 
@@ -202,10 +311,48 @@ if [ "$HAS_AUDIO" = true ]; then
 fi
 
 # Replace placeholder GPU section
-sed -i '/<!-- GPU Passthrough - REPLACE WITH YOUR GPU PCI ADDRESS -->/,/-->$/c\'"$GPU_HOSTDEV" "$VM_XML"
+# Write GPU hostdev to temp file and use it for insertion
+GPU_TMP=$(mktemp)
+echo "$GPU_HOSTDEV" > "$GPU_TMP"
+
+# Find the line number and replace the entire comment block
+sed -i '/<!-- GPU Passthrough - REPLACE WITH YOUR GPU PCI ADDRESS -->/,/-->/{
+  /<!-- GPU Passthrough - REPLACE WITH YOUR GPU PCI ADDRESS -->/r '"$GPU_TMP"'
+  d
+}' "$VM_XML"
+
+rm "$GPU_TMP"
 
 if [ "$HAS_AUDIO" = true ]; then
-    sed -i '/<!-- GPU Audio device/,/-->$/c\'"$AUDIO_HOSTDEV" "$VM_XML"
+    AUDIO_TMP=$(mktemp)
+    echo "$AUDIO_HOSTDEV" > "$AUDIO_TMP"
+
+    sed -i '/<!-- GPU Audio device/,/-->/{
+      /<!-- GPU Audio device/r '"$AUDIO_TMP"'
+      d
+    }' "$VM_XML"
+
+    rm "$AUDIO_TMP"
+fi
+
+# Add Macvtap LAN interface if selected
+if [ "$HAS_MACVTAP" = true ]; then
+    MACVTAP_INTERFACE="    <interface type='direct'>
+      <source dev='${SELECTED_NIC}' mode='bridge'/>
+      <model type='virtio'/>
+      <address type='pci' domain='0x0000' bus='0x09' slot='0x00' function='0x0'/>
+    </interface>"
+
+    MACVTAP_TMP=$(mktemp)
+    echo "$MACVTAP_INTERFACE" > "$MACVTAP_TMP"
+
+    sed -i '/<!-- Macvtap LAN Interface - REPLACE WITH YOUR NETWORK INTERFACE -->/,/-->/{
+      /<!-- Macvtap LAN Interface - REPLACE WITH YOUR NETWORK INTERFACE -->/r '"$MACVTAP_TMP"'
+      d
+    }' "$VM_XML"
+
+    rm "$MACVTAP_TMP"
+    echo -e "${GREEN}Macvtap interface configured on ${SELECTED_NIC}${NC}"
 fi
 
 # Enable IOMMU if needed
@@ -221,17 +368,21 @@ virsh define "$VM_XML"
 
 rm "$VM_XML"
 
+# Clear sensitive data from memory
+unset VM_PASSWORD
+
 echo -e "\n${GREEN}=== VM Created Successfully! ===${NC}"
 echo -e "VM Name: ${VM_NAME}"
 echo -e "Username: ${VM_USER}"
-echo -e "Password: ${VM_PASSWORD}"
+echo -e "(Password: set during VM creation - not displayed for security)"
 echo -e ""
-echo -e "Start the VM with: ${YELLOW}virsh start ${VM_NAME}${NC}"
-echo -e "Connect to console: ${YELLOW}virsh console ${VM_NAME}${NC}"
-echo -e "Get IP address: ${YELLOW}virsh domifaddr ${VM_NAME}${NC}"
+echo -e "${GREEN}Network Configuration:${NC}"
+echo -e "  - NAT interface: 192.168.122.x (for host access)"
+if [ "$HAS_MACVTAP" = true ]; then
+    echo -e "  - Macvtap interface on ${SELECTED_NIC}: Will get LAN IP via DHCP"
+fi
 echo -e ""
-echo -e "${YELLOW}Next steps:${NC}"
-echo -e "1. Start the VM: virsh start ${VM_NAME}"
-echo -e "2. Wait for cloud-init to complete (~2 minutes)"
-echo -e "3. Get VM IP: virsh domifaddr ${VM_NAME}"
-echo -e "4. Run Ansible playbook: cd deployment/ansible && ansible-playbook -i <VM_IP>, playbooks/site.yml"
+echo -e "${GREEN}VM disk images stored in: ${YELLOW}${IMAGE_DIR}${NC}"
+echo -e ""
+echo -e "${YELLOW}The VM is ready but not started yet.${NC}"
+echo -e "If running through setup-gpu-vm.sh, it will start automatically in the next phase."
