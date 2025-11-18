@@ -524,7 +524,7 @@ Uses VFIO-PCI for GPU assignment. The VM gets exclusive access to:
 - **NVIDIA Driver:** Version 565 (latest from ubuntu-drivers)
 - **CUDA:** 12.8
 - **PyTorch:** 2.7.0 with CUDA 12.8
-- **Python:** 3.12 (Ubuntu 24.04 default)
+- **Python:** 3.11 (installed via deadsnakes PPA for Forge Neo compatibility)
 - **Forge Neo:** Latest from `neo` branch
 
 ### Systemd Service

@@ -14,10 +14,7 @@
 - name: Install system dependencies
   ansible.builtin.apt:
     name:
-      - python3
-      - python3-venv
-      - python3-dev
-      - python3-pip
+      - software-properties-common
       - git
       - wget
       - curl
@@ -28,6 +25,24 @@
       - libxext6
       - libgomp1
       - libgoogle-perftools-dev
+    state: present
+    update_cache: yes
+  become: yes
+
+- name: Add deadsnakes PPA for Python 3.11
+  ansible.builtin.apt_repository:
+    repo: ppa:deadsnakes/ppa
+    state: present
+    update_cache: yes
+  become: yes
+
+- name: Install Python 3.11 and related packages
+  ansible.builtin.apt:
+    name:
+      - python3.11
+      - python3.11-venv
+      - python3.11-dev
+      - python3-pip
     state: present
     update_cache: yes
   become: yes
@@ -47,9 +62,9 @@
     version: neo
     force: no
 
-- name: Create Python virtual environment
+- name: Create Python virtual environment with Python 3.11
   ansible.builtin.command:
-    cmd: python3 -m venv venv
+    cmd: python3.11 -m venv venv
     chdir: "{{ forge_install_dir }}/app"
     creates: "{{ forge_install_dir }}/app/venv"
 
@@ -61,7 +76,7 @@
       - setuptools
     state: latest
     virtualenv: "{{ forge_install_dir }}/app/venv"
-    virtualenv_python: python3
+    virtualenv_python: python3.11
 
 - name: Install PyTorch with CUDA 12.8 support
   ansible.builtin.pip:
@@ -72,14 +87,14 @@
       - xformers==0.0.30
     extra_args: "--index-url https://download.pytorch.org/whl/cu128"
     virtualenv: "{{ forge_install_dir }}/app/venv"
-    virtualenv_python: python3
+    virtualenv_python: python3.11
 
 - name: Install bitsandbytes
   ansible.builtin.pip:
     name: bitsandbytes
     state: latest
     virtualenv: "{{ forge_install_dir }}/app/venv"
-    virtualenv_python: python3
+    virtualenv_python: python3.11
 
 - name: Install additional ML packages and download tools
   ansible.builtin.pip:
@@ -88,7 +103,7 @@
       - hf-xet
       - huggingface-hub
     virtualenv: "{{ forge_install_dir }}/app/venv"
-    virtualenv_python: python3
+    virtualenv_python: python3.11
 
 - name: Check if webui launch script exists
   ansible.builtin.stat:
