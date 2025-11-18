@@ -69,11 +69,11 @@
     group: "{{ ansible_user }}"
     mode: '0755'
 
-- name: Clone SD WebUI Forge Neo
+- name: Clone AUTOMATIC1111 Stable Diffusion WebUI
   ansible.builtin.git:
-    repo: https://github.com/Haoming02/sd-webui-forge-classic.git
+    repo: https://github.com/AUTOMATIC1111/stable-diffusion-webui.git
     dest: "{{ forge_install_dir }}/app"
-    version: neo
+    version: master
     force: no
 
 - name: Create Python virtual environment with Python 3.11 from conda
@@ -140,7 +140,7 @@
 
 - name: Note about first-run setup
   ansible.builtin.debug:
-    msg: "Forge Neo will install additional requirements on first launch"
+    msg: "Stable Diffusion WebUI will install additional requirements on first launch"
   when: not webui_script.stat.exists
 
 - name: Copy model download helper script
@@ -256,7 +256,7 @@
 - name: Display completion message
   ansible.builtin.debug:
     msg: |
-      Forge Neo installation complete!
+      Stable Diffusion WebUI installation complete!
 
       Installation directory: {{ forge_install_dir }}/app
 

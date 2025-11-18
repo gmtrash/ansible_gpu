@@ -1,6 +1,6 @@
-# NVIDIA GPU Passthrough + Stable Diffusion Forge Neo
+# NVIDIA GPU Passthrough + Stable Diffusion WebUI
 
-Automated end-to-end setup for NVIDIA GPU passthrough to Ubuntu VMs with Stable Diffusion Forge Neo deployment.
+Automated end-to-end setup for NVIDIA GPU passthrough to Ubuntu VMs with AUTOMATIC1111 Stable Diffusion WebUI deployment.
 
 ## What This Does
 
@@ -8,7 +8,7 @@ This repository automates the complete workflow for creating a GPU-accelerated S
 
 1. **Host Configuration** - Validates IOMMU support and sets up SSH keys
 2. **VM Creation** - Creates Ubuntu 24.04 VM with GPU passthrough and dual networking
-3. **Software Deployment** - Installs NVIDIA drivers, CUDA 12.8, PyTorch, and Stable Diffusion Forge Neo
+3. **Software Deployment** - Installs NVIDIA drivers, CUDA 12.8, PyTorch, and AUTOMATIC1111 Stable Diffusion WebUI
 4. **Service Setup** - Configures systemd service for automatic startup
 5. **File Sharing** - Sets up Samba shares for easy model uploads and output downloads
 
@@ -524,8 +524,8 @@ Uses VFIO-PCI for GPU assignment. The VM gets exclusive access to:
 - **NVIDIA Driver:** Version 565 (latest from ubuntu-drivers)
 - **CUDA:** 12.8
 - **PyTorch:** 2.7.0 with CUDA 12.8
-- **Python:** 3.11.9 (installed via Miniconda for Forge Neo compatibility)
-- **Forge Neo:** Latest from `neo` branch
+- **Python:** 3.11.9 (installed via Miniconda for compatibility)
+- **Stable Diffusion WebUI:** AUTOMATIC1111 latest from `master` branch
 
 ### Systemd Service
 
@@ -623,6 +623,6 @@ MIT License - See repository for details
 
 ## Acknowledgments
 
-- **Forge Neo:** [Haoming02/sd-webui-forge-classic](https://github.com/Haoming02/sd-webui-forge-classic)
+- **Stable Diffusion WebUI:** [AUTOMATIC1111/stable-diffusion-webui](https://github.com/AUTOMATIC1111/stable-diffusion-webui)
 - **VFIO Guide:** [Arch Wiki - PCI Passthrough](https://wiki.archlinux.org/title/PCI_passthrough_via_OVMF)
 - **Ubuntu Cloud Images:** [Ubuntu Cloud Images](https://cloud-images.ubuntu.com/)
