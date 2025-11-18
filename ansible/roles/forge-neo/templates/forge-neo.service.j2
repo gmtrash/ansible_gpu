@@ -12,7 +12,8 @@ Environment="LD_LIBRARY_PATH=/usr/local/cuda-12.8/lib64"
 Environment="CUDA_HOME=/usr/local/cuda-12.8"
 Environment="PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512"
 Environment="PYTHONUNBUFFERED=1"
-ExecStart={{ forge_install_dir }}/app/venv/bin/python3 launch.py --listen --port 7860 --enable-insecure-extension-access
+Environment="PYTHONFAULTHANDLER=1"
+ExecStart=/bin/bash {{ forge_install_dir }}/app/start-forge.sh
 Restart=on-failure
 RestartSec=10
 StartLimitInterval=200

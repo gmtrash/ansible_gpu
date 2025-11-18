@@ -157,6 +157,14 @@
 
       Or install the Civitai Helper extension in the WebUI
 
+- name: Copy Forge Neo startup wrapper script
+  ansible.builtin.copy:
+    src: start-forge.sh
+    dest: "{{ forge_install_dir }}/app/start-forge.sh"
+    mode: '0755'
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+
 - name: Create systemd service for Forge Neo
   ansible.builtin.template:
     src: forge-neo.service.j2

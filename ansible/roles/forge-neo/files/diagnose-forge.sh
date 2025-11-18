@@ -64,8 +64,53 @@ else
 fi
 echo ""
 
+# Check crash logs
+echo "6. Checking crash and application logs..."
+CRASH_LOG="${FORGE_DIR}/crash.log"
+WEBUI_LOG="${FORGE_DIR}/webui.log"
+
+if [ -f "$CRASH_LOG" ]; then
+    CRASH_SIZE=$(stat -f%z "$CRASH_LOG" 2>/dev/null || stat -c%s "$CRASH_LOG" 2>/dev/null)
+    CRASH_LINES=$(wc -l < "$CRASH_LOG")
+    echo "   ✓ Crash log found: $CRASH_LOG"
+    echo "     Size: $CRASH_SIZE bytes, Lines: $CRASH_LINES"
+
+    # Check for recent crashes
+    if grep -q "CRASH DETECTED" "$CRASH_LOG" 2>/dev/null; then
+        echo "   ⚠ CRASHES DETECTED in crash.log!"
+        echo "   Last crash entry:"
+        echo "   ─────────────────────────────────────────────────────────"
+        grep -A 20 "CRASH DETECTED" "$CRASH_LOG" | tail -n 25
+        echo "   ─────────────────────────────────────────────────────────"
+    else
+        echo "   ✓ No crashes detected in crash.log"
+    fi
+else
+    echo "   ℹ Crash log not found (service may not have been started yet)"
+fi
+
+if [ -f "$WEBUI_LOG" ]; then
+    WEBUI_SIZE=$(stat -f%z "$WEBUI_LOG" 2>/dev/null || stat -c%s "$WEBUI_LOG" 2>/dev/null)
+    echo "   ✓ WebUI log found: $WEBUI_LOG (Size: $WEBUI_SIZE bytes)"
+
+    # Check for errors in webui log
+    ERROR_COUNT=$(grep -i "error\|exception\|traceback\|failed" "$WEBUI_LOG" 2>/dev/null | wc -l)
+    if [ "$ERROR_COUNT" -gt 0 ]; then
+        echo "   ⚠ Found $ERROR_COUNT error line(s) in webui.log"
+        echo "   Recent errors:"
+        echo "   ─────────────────────────────────────────────────────────"
+        grep -i "error\|exception\|traceback" "$WEBUI_LOG" | tail -n 10
+        echo "   ─────────────────────────────────────────────────────────"
+    else
+        echo "   ✓ No errors found in webui.log"
+    fi
+else
+    echo "   ℹ WebUI log not found (service may not have been started yet)"
+fi
+echo ""
+
 # Check NVIDIA GPU
-echo "6. Checking NVIDIA GPU status..."
+echo "7. Checking NVIDIA GPU status..."
 if command -v nvidia-smi &> /dev/null; then
     nvidia-smi --query-gpu=name,driver_version,memory.total,memory.used --format=csv,noheader | while read line; do
         echo "   ✓ GPU: $line"
@@ -76,7 +121,7 @@ fi
 echo ""
 
 # Check CUDA
-echo "7. Checking CUDA installation..."
+echo "8. Checking CUDA installation..."
 if [ -d "/usr/local/cuda-12.8" ]; then
     echo "   ✓ CUDA 12.8 is installed"
     if [ -f "/usr/local/cuda-12.8/bin/nvcc" ]; then
@@ -89,7 +134,7 @@ fi
 echo ""
 
 # Test PyTorch in venv
-echo "8. Testing PyTorch and CUDA in virtual environment..."
+echo "9. Testing PyTorch and CUDA in virtual environment..."
 cd "$FORGE_DIR"
 source venv/bin/activate
 
@@ -109,12 +154,12 @@ deactivate
 echo ""
 
 # Check disk space
-echo "9. Checking disk space..."
+echo "10. Checking disk space..."
 df -h "$FORGE_DIR" | tail -n 1 | awk '{print "   Filesystem: "$1"\n   Size: "$2"\n   Used: "$3"\n   Available: "$4"\n   Use%: "$5}'
 echo ""
 
 # Check port 7860
-echo "10. Checking if port 7860 is listening..."
+echo "11. Checking if port 7860 is listening..."
 if ss -tln | grep -q ":7860 "; then
     echo "   ✓ Port 7860 is listening"
     ss -tlnp | grep ":7860 " | head -n 1
@@ -130,16 +175,26 @@ echo "============================================================"
 echo ""
 echo "If you see errors above, try the following:"
 echo ""
-echo "1. View full service logs:"
+echo "1. Check crash logs (if backend is crashing):"
+echo "   tail -f $FORGE_DIR/crash.log"
+echo "   tail -f $FORGE_DIR/webui.log"
+echo ""
+echo "2. View full service logs:"
 echo "   sudo journalctl -u forge-neo -f"
 echo ""
-echo "2. Restart the service:"
+echo "3. Restart the service:"
+echo "   sudo systemctl daemon-reload"
 echo "   sudo systemctl restart forge-neo"
 echo ""
-echo "3. Test manually:"
+echo "4. Test manually (to see errors in real-time):"
 echo "   cd $FORGE_DIR"
 echo "   source venv/bin/activate"
 echo "   python3 launch.py --listen --port 7860"
 echo ""
-echo "4. Check for specific errors and report them for further help"
+echo "5. Check for specific errors and report them for further help"
+echo ""
+echo "Important log files:"
+echo "- Crash log: $FORGE_DIR/crash.log"
+echo "- WebUI log: $FORGE_DIR/webui.log"
+echo "- System log: journalctl -u forge-neo"
 echo ""

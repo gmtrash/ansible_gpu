@@ -362,6 +362,7 @@ cd ~/forge-neo
 
 The diagnostic script will check:
 - Service status and recent logs
+- **Crash logs** (crash.log and webui.log)
 - PyTorch and CUDA availability
 - GPU memory and utilization
 - Recent errors and exceptions
@@ -370,10 +371,16 @@ The diagnostic script will check:
 
 1. **Backend process crashing:**
    ```bash
-   # View real-time logs to see the crash
+   # Check crash log (this captures errors that happen too fast for journald)
+   tail -f ~/forge-neo/app/crash.log
+
+   # Check webui log for application-level errors
+   tail -f ~/forge-neo/app/webui.log
+
+   # Also check system logs
    sudo journalctl -u forge-neo -f
 
-   # Look for "CUDA out of memory" or "RuntimeError"
+   # Look for "CUDA out of memory", "RuntimeError", or Python tracebacks
    ```
 
 2. **CUDA out of memory:**
