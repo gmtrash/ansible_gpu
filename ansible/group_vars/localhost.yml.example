@@ -55,7 +55,8 @@ forge_install_dir: "{{ home_dir }}/llm/sd-webui-forge"
 
 # Conda environment
 forge_conda_env: "forge-cuda"
-forge_python_version: "3.11.9"
+# Python 3.12.x is supported and tested (despite upstream warning for 3.11.9)
+forge_python_version: "3.12"
 
 # Model directories
 forge_models_dir: "{{ forge_install_dir }}/models"
@@ -76,6 +77,7 @@ forge_commandline_args: >-
   --no-download-sd-model
   --listen
   --enable-insecure-extension-access
+  --skip-python-version-check
 
 # Performance mode for NVIDIA RTX 5060 Ti
 forge_gpu_mode: "dedicated-high"
