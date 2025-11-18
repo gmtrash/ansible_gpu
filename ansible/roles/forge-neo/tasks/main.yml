@@ -174,6 +174,40 @@
   become: yes
   when: forge_create_service | default(true)
 
+- name: Copy CUDA verification test script
+  ansible.builtin.copy:
+    src: test_cuda.py
+    dest: "{{ forge_install_dir }}/app/test_cuda.py"
+    mode: '0755'
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+
+- name: Run CUDA verification test (with venv activated)
+  ansible.builtin.shell: |
+    source venv/bin/activate
+    python3 test_cuda.py
+  args:
+    chdir: "{{ forge_install_dir }}/app"
+    executable: /bin/bash
+  register: cuda_test
+  failed_when: false
+  changed_when: false
+
+- name: Display CUDA verification results
+  ansible.builtin.debug:
+    msg: "{{ cuda_test.stdout_lines }}"
+  when: cuda_test.stdout_lines is defined
+
+- name: Display CUDA verification errors (if any)
+  ansible.builtin.debug:
+    msg: "{{ cuda_test.stderr_lines }}"
+  when: cuda_test.stderr_lines is defined and cuda_test.stderr_lines | length > 0
+
+- name: Fail if CUDA verification failed
+  ansible.builtin.fail:
+    msg: "CUDA verification failed! Please check the output above."
+  when: cuda_test.rc != 0
+
 - name: Display completion message
   ansible.builtin.debug:
     msg: |
@@ -194,3 +228,6 @@
       Stop: sudo systemctl stop forge-neo
       Enable on boot: sudo systemctl enable forge-neo
       {% endif %}
+
+      CUDA Verification: PASSED ✓
+      PyTorch with CUDA support is working correctly!
