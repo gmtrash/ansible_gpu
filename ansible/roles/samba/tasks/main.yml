@@ -20,11 +20,31 @@
     update_cache: yes
   become: yes
 
-- name: Create Samba user (same password as system user)
+- name: Create Samba user with password (if ansible_password is defined)
   ansible.builtin.shell: |
     (echo "{{ ansible_password }}"; echo "{{ ansible_password }}") | smbpasswd -a {{ ansible_user }} -s
   become: yes
   changed_when: false
+  no_log: true
+  when: ansible_password is defined
+
+- name: Create Samba user with random password (if ansible_password not defined)
+  ansible.builtin.shell: |
+    SAMBA_PASS=$(openssl rand -base64 12)
+    (echo "$SAMBA_PASS"; echo "$SAMBA_PASS") | smbpasswd -a {{ ansible_user }} -s
+    echo "$SAMBA_PASS" > /tmp/samba_password.txt
+    chmod 600 /tmp/samba_password.txt
+  become: yes
+  changed_when: false
+  when: ansible_password is not defined
+  register: samba_random_pass
+
+- name: Read generated Samba password
+  ansible.builtin.slurp:
+    src: /tmp/samba_password.txt
+  become: yes
+  register: samba_pass_file
+  when: ansible_password is not defined
   no_log: true
 
 - name: Enable Samba user
@@ -61,7 +81,7 @@
     - smbd
     - nmbd
 
-- name: Display Samba access information
+- name: Display Samba access information (with defined password)
   ansible.builtin.debug:
     msg: |
       ========================================
@@ -87,3 +107,35 @@
 
       Web UI logs also available via: sudo journalctl -u forge-neo -f
       ========================================
+  when: ansible_password is defined
+
+- name: Display Samba access information (with random password)
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      Samba Share Configured
+      ========================================
+
+      Access from Windows:
+        \\{{ ansible_default_ipv4.address }}\forge-neo
+
+      Access from Linux/Mac:
+        smb://{{ ansible_default_ipv4.address }}/forge-neo
+
+      Username: {{ ansible_user }}
+      Password: {{ samba_pass_file.content | b64decode | trim }}
+
+      IMPORTANT: Save this password! It was randomly generated.
+      To change it: sudo smbpasswd {{ ansible_user }}
+
+      Shared directory: {{ forge_install_dir }}/app
+      Contains:
+        - models/          (upload checkpoints, LoRAs, VAEs here)
+        - outputs/         (generated images)
+        - logs/            (web UI error logs if any)
+        - extensions/      (installed extensions)
+        - webui.log        (main application log)
+
+      Web UI logs also available via: sudo journalctl -u forge-neo -f
+      ========================================
+  when: ansible_password is not defined
