@@ -124,6 +124,12 @@
     state: latest
     virtualenv: "{{ forge_install_dir }}/app/venv"
 
+- name: Install SageAttention (2x faster than FlashAttention2)
+  ansible.builtin.pip:
+    name: sageattention
+    state: latest
+    virtualenv: "{{ forge_install_dir }}/app/venv"
+
 - name: Install additional ML packages and download tools
   ansible.builtin.pip:
     name:
