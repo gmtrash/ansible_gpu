@@ -124,15 +124,6 @@
     state: latest
     virtualenv: "{{ forge_install_dir }}/app/venv"
 
-- name: Install flash-attn (optimized attention, slow to compile)
-  ansible.builtin.pip:
-    name: flash-attn
-    state: latest
-    virtualenv: "{{ forge_install_dir }}/app/venv"
-    extra_args: "--no-build-isolation"
-  async: 1800
-  poll: 10
-
 - name: Install additional ML packages and download tools
   ansible.builtin.pip:
     name:
