@@ -1,0 +1,27 @@
+# Ansible inventory files (user-specific)
+ansible/inventory/hosts.ini
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# Ansible
+*.retry
+.vault_pass
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
