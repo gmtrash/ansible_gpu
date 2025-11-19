@@ -82,7 +82,7 @@
     msg: |
       Skipping graphics-drivers PPA due to frequent keyserver timeouts.
       Using NVIDIA drivers from default Ubuntu 24.04 repos instead.
-      (Will install nvidia-driver-580-server for headless systems)
+      (Will install nvidia-driver-580-open for VM/headless compatibility)
 
 - name: Update apt cache
   ansible.builtin.apt:
@@ -136,9 +136,9 @@
   changed_when: false
   become: yes
 
-- name: Install NVIDIA driver (fallback to 580-server for headless)
+- name: Install NVIDIA driver (fallback to 580-open for VM compatibility)
   ansible.builtin.apt:
-    name: nvidia-driver-580-server
+    name: nvidia-driver-580-open
     state: present
     install_recommends: yes
     dpkg_options: 'force-confold,force-confdef,force-overwrite'
@@ -182,7 +182,7 @@
   ansible.builtin.debug:
     msg: |
       ✓ CUDA Toolkit 12.8 installed successfully
-      Note: Using existing NVIDIA driver (580-server), not installing cuda-drivers metapackage
+      Note: Using NVIDIA open-source driver (580-open), not installing cuda-drivers metapackage
       to avoid driver version conflicts.
 
 - name: Add CUDA to PATH in profile
@@ -223,7 +223,7 @@
       1. SSH to VM: ssh {{ ansible_user }}@{{ inventory_hostname }}
       2. Run: ./check-nvidia.sh
       3. Check for errors: journalctl -xe
-      4. Try manual install: sudo apt install nvidia-driver-580-server
+      4. Try manual install: sudo apt install nvidia-driver-580-open
   when: nvidia_check.rc != 0
 
 - name: Check if reboot is required
