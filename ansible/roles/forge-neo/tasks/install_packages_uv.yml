@@ -1,0 +1,77 @@
+---
+# Modern uv-based package installation (faster alternative to pip)
+
+- name: Check if uv is installed
+  ansible.builtin.command:
+    cmd: uv --version
+  register: uv_check
+  failed_when: false
+  changed_when: false
+
+- name: Install uv (fast Python package installer)
+  ansible.builtin.shell: |
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+  args:
+    creates: "{{ ansible_env.HOME }}/.cargo/bin/uv"
+  environment:
+    SHELL: /bin/bash
+  when: uv_check.rc != 0
+
+- name: Add uv to PATH for current session
+  ansible.builtin.set_fact:
+    ansible_env: "{{ ansible_env | combine({'PATH': ansible_env.HOME ~ '/.cargo/bin:' ~ ansible_env.PATH}) }}"
+  when: uv_check.rc != 0
+
+- name: Create Python virtual environment with uv
+  ansible.builtin.command:
+    cmd: "{{ ansible_env.HOME }}/.cargo/bin/uv venv venv"
+    chdir: "{{ forge_install_dir }}/app"
+    creates: "{{ forge_install_dir }}/app/venv"
+
+- name: Install PyTorch with CUDA 12.8 support using uv
+  ansible.builtin.shell: |
+    {{ ansible_env.HOME }}/.cargo/bin/uv pip install \
+      torch==2.7.0 \
+      torchvision==0.22.0 \
+      torchaudio==2.7.0 \
+      xformers==0.0.30 \
+      --index-url https://download.pytorch.org/whl/cu128
+  args:
+    chdir: "{{ forge_install_dir }}/app"
+    executable: /bin/bash
+  environment:
+    VIRTUAL_ENV: "{{ forge_install_dir }}/app/venv"
+  register: uv_pytorch_install
+  changed_when: "'Already installed' not in uv_pytorch_install.stderr"
+
+- name: Install bitsandbytes using uv
+  ansible.builtin.shell: |
+    {{ ansible_env.HOME }}/.cargo/bin/uv pip install bitsandbytes
+  args:
+    chdir: "{{ forge_install_dir }}/app"
+    executable: /bin/bash
+  environment:
+    VIRTUAL_ENV: "{{ forge_install_dir }}/app/venv"
+  register: uv_bitsandbytes_install
+  changed_when: "'Already installed' not in uv_bitsandbytes_install.stderr"
+
+- name: Install additional ML packages and download tools using uv
+  ansible.builtin.shell: |
+    {{ ansible_env.HOME }}/.cargo/bin/uv pip install \
+      svglib==1.5.1 \
+      hf-xet \
+      huggingface-hub
+  args:
+    chdir: "{{ forge_install_dir }}/app"
+    executable: /bin/bash
+  environment:
+    VIRTUAL_ENV: "{{ forge_install_dir }}/app/venv"
+  register: uv_additional_install
+  changed_when: "'Already installed' not in uv_additional_install.stderr"
+
+- name: Display uv installation summary
+  ansible.builtin.debug:
+    msg: |
+      Package installation completed using uv (fast Python package manager)
+      PyTorch and dependencies installed from CUDA 12.8 index
+      Virtual environment: {{ forge_install_dir }}/app/venv

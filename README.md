@@ -403,6 +403,28 @@ vars:
   forge_install_dir: "/home/{{ ansible_user }}/forge-neo"  # Change this path
 ```
 
+### Use uv for Faster Package Installation (Experimental)
+
+Enable `uv` (a fast Python package manager) instead of traditional `pip`:
+
+Edit `ansible/playbooks/site.yml`:
+
+```yaml
+vars:
+  forge_use_uv: true  # Use uv instead of pip (10x faster)
+```
+
+**Benefits:**
+- 10-100x faster package installation (PyTorch installs in ~2 minutes vs 10+ minutes)
+- Better dependency resolution
+- Modern Python package management
+
+**Trade-offs:**
+- Less mature than pip (newer tool)
+- Experimental feature (default is `false` for stability)
+
+**Recommendation:** Try `forge_use_uv: true` for new installations. Falls back to standard pip if set to `false`.
+
 ### Prevent Service Auto-Start
 
 Edit `ansible/playbooks/site.yml`:

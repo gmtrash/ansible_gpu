@@ -4,6 +4,11 @@
 forge_install_dir: "/home/{{ ansible_user }}/forge-neo"
 forge_neo_branch: "main"
 
+# Package manager options
+# Set to true to use uv (faster, modern Python package manager)
+# Set to false to use pip (traditional, default)
+forge_use_uv: false
+
 # Model download options
 forge_download_default_model: true
 

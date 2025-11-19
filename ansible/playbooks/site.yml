@@ -14,6 +14,7 @@
     forge_create_service: true
     forge_enable_service: true
     forge_start_service: true
+    # forge_use_uv: true  # Uncomment to use uv (10x faster) instead of pip
 
     # Samba configuration
     samba_enabled: true  # Set to false to skip Samba setup
