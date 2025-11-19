@@ -129,6 +129,11 @@
     name: sageattention
     state: latest
     virtualenv: "{{ forge_install_dir }}/app/venv"
+    extra_args: "--no-build-isolation"
+  environment:
+    TORCH_CUDA_ARCH_LIST: "8.0;8.6;8.9;9.0"
+  async: 600
+  poll: 10
 
 - name: Install additional ML packages and download tools
   ansible.builtin.pip:
