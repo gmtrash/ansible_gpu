@@ -521,9 +521,9 @@ Uses VFIO-PCI for GPU assignment. The VM gets exclusive access to:
 ### Software Versions
 
 - **OS:** Ubuntu 24.04 LTS (cloud image)
-- **NVIDIA Driver:** Version 565 (latest from ubuntu-drivers)
-- **CUDA:** 12.8
-- **PyTorch:** 2.7.0 with CUDA 12.8
+- **NVIDIA Driver:** Version 550-565 (from ubuntu-drivers, compatible with CUDA 12.8)
+- **CUDA:** Toolkit 12.8 (installed without cuda-drivers metapackage to avoid conflicts)
+- **PyTorch:** 2.7.0 with CUDA 12.8 support
 - **Python:** 3.11.9 (installed via Miniconda for compatibility)
 - **Stable Diffusion WebUI:** AUTOMATIC1111 latest from `master` branch
 

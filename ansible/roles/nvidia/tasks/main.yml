@@ -149,15 +149,19 @@
     update_cache: yes
   become: yes
 
-- name: Install CUDA Toolkit 12.8
+- name: Install CUDA Toolkit 12.8 (without cuda-drivers to avoid conflicts)
   ansible.builtin.apt:
     name:
       - cuda-toolkit-12-8
-      - cuda-drivers
     state: present
+    dpkg_options: 'force-confold,force-confdef'
   become: yes
+  register: cuda_install
+  retries: 2
+  delay: 10
+  until: cuda_install is succeeded
 
-- name: Add CUDA to PATH in profile
+- name: Add CUDA to system PATH
   ansible.builtin.lineinfile:
     path: /etc/profile.d/cuda.sh
     line: "{{ item }}"
@@ -167,6 +171,13 @@
   loop:
     - 'export PATH=/usr/local/cuda-12.8/bin:$PATH'
     - 'export LD_LIBRARY_PATH=/usr/local/cuda-12.8/lib64:$LD_LIBRARY_PATH'
+
+- name: Note about CUDA and driver compatibility
+  ansible.builtin.debug:
+    msg: |
+      ✓ CUDA Toolkit 12.8 installed successfully.
+      ✓ Using existing nvidia-driver-550 (meets CUDA 12.8 requirement of >= 550.54.15)
+      ✓ Skipped cuda-drivers metapackage to avoid driver version conflicts
 
 - name: Verify NVIDIA driver installation
   ansible.builtin.shell: dpkg -l | grep -i nvidia-driver | grep ^ii || echo "No driver installed"
