@@ -16,6 +16,8 @@
     update_cache: yes
     cache_valid_time: 3600
   become: yes
+  async: 300
+  poll: 5
 
 - name: Configure any pending dpkg packages
   ansible.builtin.command: dpkg --configure -a
@@ -88,6 +90,8 @@
   ansible.builtin.apt:
     update_cache: yes
   become: yes
+  async: 300
+  poll: 5
 
 - name: Detect recommended NVIDIA driver
   ansible.builtin.shell: ubuntu-drivers devices 2>&1 | grep -v "udevadm hwdb is deprecated" | grep recommended | awk '{print $3}'
@@ -165,6 +169,8 @@
   ansible.builtin.apt:
     update_cache: yes
   become: yes
+  async: 300
+  poll: 5
 
 - name: Install CUDA Toolkit 12.8
   ansible.builtin.apt:

@@ -40,6 +40,8 @@
     state: present
     update_cache: yes
   become: yes
+  async: 300
+  poll: 5
 
 - name: Install pyenv
   ansible.builtin.git:

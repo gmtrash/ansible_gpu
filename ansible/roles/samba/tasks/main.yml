@@ -19,6 +19,8 @@
     state: present
     update_cache: yes
   become: yes
+  async: 300
+  poll: 5
 
 - name: Create Samba user with password (if ansible_password is defined)
   ansible.builtin.shell: |
