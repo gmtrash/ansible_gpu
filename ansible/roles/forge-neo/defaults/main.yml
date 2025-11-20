@@ -8,7 +8,7 @@ forge_neo_branch: "main"
 # System requirements
 # - Python 3.11 (required for Blackwell support)
 # - CUDA 12.8 (installed by nvidia role)
-# - PyTorch 2.9.1+cu128 (installed from requirements)
+# - PyTorch 2.9.0+cu128 (installed from requirements)
 # - SageAttention 2.2.0 (Blackwell-optimized)
 
 # Package manager options

@@ -88,7 +88,7 @@
   ansible.builtin.debug:
     msg: |
       All packages installed via Ansible (--skip-install flag enabled)
-      Using Python 3.11 with PyTorch 2.9.1+cu128
+      Using Python 3.11 with PyTorch 2.9.0+cu128
       SageAttention 2.2.0 enabled for Blackwell GPU optimization
 
 - name: Copy model download helper script
@@ -158,7 +158,7 @@
 
       Installation directory: {{ forge_install_dir }}/app
       Python version: 3.11
-      PyTorch: 2.9.1+cu128 (CUDA 12.8)
+      PyTorch: 2.9.0+cu128 (CUDA 12.8)
       Attention: SageAttention 2.2.0 (optimized for RTX 5060 Ti)
 
       To start manually:
