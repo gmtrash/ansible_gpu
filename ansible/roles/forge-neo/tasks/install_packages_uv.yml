@@ -97,7 +97,7 @@
 
 - name: Install acceleration packages using uv (SageAttention for Blackwell)
   ansible.builtin.shell: |
-    {{ uv_bin }} pip install -r requirements_acceleration.txt
+    {{ uv_bin }} pip install -r requirements_acceleration.txt --no-build-isolation
   args:
     chdir: "{{ forge_install_dir }}/app"
     executable: /bin/bash
