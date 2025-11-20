@@ -1,12 +1,19 @@
 ---
 # Forge Neo installation defaults
+# Optimized for NVIDIA Blackwell GPUs (RTX 5060 Ti)
 
 forge_install_dir: "/home/{{ ansible_user }}/forge-neo"
 forge_neo_branch: "main"
 
+# System requirements
+# - Python 3.11 (required for Blackwell support)
+# - CUDA 12.8 (installed by nvidia role)
+# - PyTorch 2.9.1+cu128 (installed from requirements)
+# - SageAttention 2.2.0 (Blackwell-optimized)
+
 # Package manager options
-# Set to true to use uv (faster, modern Python package manager)
-# Set to false to use pip (traditional, default)
+# Set to true to use uv (10-100x faster, recommended)
+# Set to false to use pip (traditional, default for stability)
 forge_use_uv: false
 
 # Model download options

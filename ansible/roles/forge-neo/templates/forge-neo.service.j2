@@ -8,7 +8,7 @@ User={{ ansible_user }}
 WorkingDirectory={{ forge_install_dir }}/app
 Environment="PATH={{ ansible_env.HOME }}/.cargo/bin:/usr/local/cuda-12.8/bin:{{ ansible_env.PATH }}"
 Environment="LD_LIBRARY_PATH=/usr/local/cuda-12.8/lib64"
-ExecStart={{ forge_install_dir }}/app/venv/bin/python3 launch.py --listen --port 7860
+ExecStart={{ forge_install_dir }}/app/venv/bin/python3 webui.py --sage --disable-flash --cuda-malloc --listen --port 7860 --skip-install
 Restart=on-failure
 RestartSec=10
 StandardOutput=journal

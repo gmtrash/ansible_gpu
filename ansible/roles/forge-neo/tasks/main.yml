@@ -18,6 +18,9 @@
       - python3-venv
       - python3-dev
       - python3-pip
+      - python3.11
+      - python3.11-venv
+      - python3.11-dev
       - git
       - wget
       - curl
@@ -31,6 +34,16 @@
     state: present
     update_cache: yes
   become: yes
+
+- name: Verify Python 3.11 is available
+  ansible.builtin.command:
+    cmd: python3.11 --version
+  register: python311_version
+  changed_when: false
+
+- name: Display Python 3.11 version
+  ansible.builtin.debug:
+    msg: "Python 3.11 version: {{ python311_version.stdout }}"
 
 - name: Create forge-neo installation directory
   ansible.builtin.file:
@@ -59,29 +72,20 @@
   ansible.builtin.include_tasks: install_packages_pip.yml
   when: not (forge_use_uv | bool)
 
-- name: Check if webui launch script exists
-  ansible.builtin.stat:
-    path: "{{ forge_install_dir }}/app/webui.sh"
-  register: webui_script
+- name: Create webui-user.sh launch script (Blackwell-optimized)
+  ansible.builtin.template:
+    src: webui-user.sh.j2
+    dest: "{{ forge_install_dir }}/app/webui-user.sh"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: '0755'
 
-- name: Run initial webui setup (creates requirements and downloads models)
-  ansible.builtin.shell: |
-    source venv/bin/activate
-    bash webui.sh -f --exit
-  args:
-    chdir: "{{ forge_install_dir }}/app"
-    executable: /bin/bash
-  environment:
-    SD_WEBUI_RESTARTING: "1"
-  timeout: 1200
-  when: webui_script.stat.exists
-  register: webui_setup
-  failed_when: false
-
-- name: Note about first-run setup
+- name: Note about package installation
   ansible.builtin.debug:
-    msg: "Forge Neo will install additional requirements on first launch"
-  when: not webui_script.stat.exists
+    msg: |
+      All packages installed via Ansible (--skip-install flag enabled)
+      Using Python 3.11 with PyTorch 2.9.1+cu128
+      SageAttention 2.2.0 enabled for Blackwell GPU optimization
 
 - name: Copy model download helper script
   ansible.builtin.copy:
@@ -146,14 +150,21 @@
 - name: Display completion message
   ansible.builtin.debug:
     msg: |
-      Forge Neo installation complete!
+      Forge Neo installation complete! (Blackwell-optimized)
 
       Installation directory: {{ forge_install_dir }}/app
+      Python version: 3.11
+      PyTorch: 2.9.1+cu128 (CUDA 12.8)
+      Attention: SageAttention 2.2.0 (optimized for RTX 5060 Ti)
 
       To start manually:
         cd {{ forge_install_dir }}/app
+        ./webui-user.sh
+
+      Or with custom flags:
+        cd {{ forge_install_dir }}/app
         source venv/bin/activate
-        bash webui.sh
+        python3 webui.py --sage --disable-flash --cuda-malloc --listen --port 7860
 
       The WebUI will be available at http://{{ ansible_default_ipv4.address }}:7860
 

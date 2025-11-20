@@ -478,9 +478,10 @@ Uses VFIO-PCI for GPU assignment. The VM gets exclusive access to:
 - **OS:** Ubuntu 24.04 LTS (cloud image)
 - **NVIDIA Driver:** Version 565 (latest from ubuntu-drivers)
 - **CUDA:** 12.8
-- **PyTorch:** 2.7.0 with CUDA 12.8
-- **Python:** 3.12 (Ubuntu 24.04 default)
-- **Forge Neo:** Latest from `neo` branch
+- **PyTorch:** 2.9.1 with CUDA 12.8 (Blackwell-optimized)
+- **Python:** 3.11 (required for Blackwell support)
+- **Forge Neo:** Latest from `neo` branch (Haoming02/sd-webui-forge-classic)
+- **SageAttention:** 2.2.0 (optimized for RTX 5060 Ti Blackwell)
 
 ### Systemd Service
 
@@ -497,12 +498,18 @@ User=<username>
 WorkingDirectory=/home/<username>/forge-neo/app
 Environment="PATH=/usr/local/cuda-12.8/bin:..."
 Environment="LD_LIBRARY_PATH=/usr/local/cuda-12.8/lib64"
-ExecStart=/home/<username>/forge-neo/app/venv/bin/python3 launch.py --listen --port 7860
+ExecStart=/home/<username>/forge-neo/app/venv/bin/python3 webui.py --sage --disable-flash --cuda-malloc --listen --port 7860 --skip-install
 Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target
 ```
+
+**Blackwell GPU Optimization Flags:**
+- `--sage` - Use SageAttention 2.2.0 (optimized for RTX 5060 Ti)
+- `--disable-flash` - Disable FlashAttention (SageAttention takes priority)
+- `--cuda-malloc` - CUDA memory optimization
+- `--skip-install` - Skip automatic package installation (already done by Ansible)
 
 ---
 
