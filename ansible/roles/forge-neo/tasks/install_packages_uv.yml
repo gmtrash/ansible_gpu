@@ -4,7 +4,7 @@
 
 - name: Set uv executable path
   ansible.builtin.set_fact:
-    uv_bin: "{{ ansible_env.HOME }}/.cargo/bin/uv"
+    uv_bin: "{{ ansible_env.HOME }}/.local/bin/uv"
 
 - name: Check if uv is installed
   ansible.builtin.stat:
