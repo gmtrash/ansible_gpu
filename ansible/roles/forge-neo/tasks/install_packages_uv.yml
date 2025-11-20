@@ -17,7 +17,12 @@
   environment:
     SHELL: /bin/bash
   when: not uv_stat.stat.exists
-  register: uv_install_result
+
+- name: Wait for uv binary to be available
+  ansible.builtin.wait_for:
+    path: "{{ uv_bin }}"
+    timeout: 30
+  when: not uv_stat.stat.exists
 
 - name: Verify uv installation
   ansible.builtin.command:
