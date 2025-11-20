@@ -1,0 +1,11 @@
+# Forge Neo - Acceleration Packages (Linux)
+# Install AFTER base requirements: pip install -r forge_neo_requirements_acceleration_linux.txt
+
+# SageAttention (Linux uses PyPI)
+sageattention==2.2.0
+
+# Triton
+triton==3.5.1
+
+# Note: FlashAttention and Nunchaku require wheel installation
+# Use install_wheels_linux.sh for these packages
