@@ -61,6 +61,17 @@
     virtualenv: "{{ forge_install_dir }}/app/venv"
     virtualenv_python: python3.11
     extra_args: "--no-build-isolation"
+  register: pip_acceleration_install
+  failed_when: false
+  ignore_errors: yes
+
+- name: Warn if SageAttention installation failed
+  ansible.builtin.debug:
+    msg: |
+      WARNING: SageAttention installation failed. This is a known issue with RTX 50 series.
+      The system will fall back to FlashAttention or xformers.
+      You can manually install SageAttention later if needed.
+  when: pip_acceleration_install.failed
 
 - name: Display pip installation summary
   ansible.builtin.debug:

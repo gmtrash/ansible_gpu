@@ -35,6 +35,9 @@
       - libxext6
       - libgomp1
       - libgoogle-perftools-dev
+      - build-essential
+      - ninja-build
+      - cmake
     state: present
     update_cache: yes
   become: yes

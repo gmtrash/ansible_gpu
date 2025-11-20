@@ -105,6 +105,16 @@
     VIRTUAL_ENV: "{{ forge_install_dir }}/app/venv"
   register: uv_acceleration_install
   changed_when: "'Already installed' not in uv_acceleration_install.stderr"
+  failed_when: false
+  ignore_errors: yes
+
+- name: Warn if SageAttention installation failed
+  ansible.builtin.debug:
+    msg: |
+      WARNING: SageAttention installation failed. This is a known issue with RTX 50 series.
+      The system will fall back to FlashAttention or xformers.
+      You can manually install SageAttention later if needed.
+  when: uv_acceleration_install.rc != 0
 
 - name: Display uv installation summary
   ansible.builtin.debug:
