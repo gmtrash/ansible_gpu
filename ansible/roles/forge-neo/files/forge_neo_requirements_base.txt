@@ -3,7 +3,7 @@
 # Install AFTER PyTorch: pip install -r forge_neo_requirements_base.txt
 
 GitPython==3.1.44
-Pillow==11.3.0
+Pillow==10.3.0
 accelerate==1.10.1
 clean-fid==0.1.35
 diffusers==0.35.1
