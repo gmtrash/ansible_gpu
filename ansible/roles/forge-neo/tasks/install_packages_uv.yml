@@ -23,9 +23,16 @@
     ansible_env: "{{ ansible_env | combine({'PATH': ansible_env.HOME ~ '/.cargo/bin:' ~ ansible_env.PATH}) }}"
   when: uv_check.rc != 0
 
+- name: Install Python 3.11 using uv
+  ansible.builtin.command:
+    cmd: "{{ ansible_env.HOME }}/.cargo/bin/uv python install 3.11"
+  register: uv_python_install
+  changed_when: "'already installed' not in uv_python_install.stdout.lower()"
+  failed_when: false
+
 - name: Create Python 3.11 virtual environment with uv
   ansible.builtin.command:
-    cmd: "{{ ansible_env.HOME }}/.cargo/bin/uv venv venv --python python3.11"
+    cmd: "{{ ansible_env.HOME }}/.cargo/bin/uv venv venv --python 3.11"
     chdir: "{{ forge_install_dir }}/app"
     creates: "{{ forge_install_dir }}/app/venv"
 

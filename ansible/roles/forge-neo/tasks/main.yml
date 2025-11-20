@@ -11,6 +11,13 @@
   changed_when: false
   timeout: 300
 
+- name: Add deadsnakes PPA for Python 3.11 (if using pip)
+  ansible.builtin.apt_repository:
+    repo: ppa:deadsnakes/ppa
+    state: present
+  become: yes
+  when: not (forge_use_uv | bool)
+
 - name: Install system dependencies
   ansible.builtin.apt:
     name:
@@ -18,9 +25,6 @@
       - python3-venv
       - python3-dev
       - python3-pip
-      - python3.11
-      - python3.11-venv
-      - python3.11-dev
       - git
       - wget
       - curl
@@ -35,15 +39,15 @@
     update_cache: yes
   become: yes
 
-- name: Verify Python 3.11 is available
-  ansible.builtin.command:
-    cmd: python3.11 --version
-  register: python311_version
-  changed_when: false
-
-- name: Display Python 3.11 version
-  ansible.builtin.debug:
-    msg: "Python 3.11 version: {{ python311_version.stdout }}"
+- name: Install Python 3.11 from deadsnakes PPA (if using pip)
+  ansible.builtin.apt:
+    name:
+      - python3.11
+      - python3.11-venv
+      - python3.11-dev
+    state: present
+  become: yes
+  when: not (forge_use_uv | bool)
 
 - name: Create forge-neo installation directory
   ansible.builtin.file:
