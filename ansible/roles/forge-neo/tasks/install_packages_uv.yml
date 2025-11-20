@@ -111,9 +111,37 @@
 - name: Warn if SageAttention installation failed
   ansible.builtin.debug:
     msg: |
-      WARNING: SageAttention installation failed. This is a known issue with RTX 50 series.
-      The system will fall back to FlashAttention or xformers.
-      You can manually install SageAttention later if needed.
+      ============================================================
+      WARNING: SageAttention installation failed
+      ============================================================
+
+      This is a known issue with RTX 50 series GPUs. The system
+      will fall back to FlashAttention or xformers (still fast!).
+
+      To manually install SageAttention later:
+
+      1. SSH to the VM:
+         ssh {{ ansible_user }}@{{ ansible_default_ipv4.address }}
+
+      2. Activate the virtual environment:
+         cd {{ forge_install_dir }}/app
+         source venv/bin/activate
+
+      3. Install build dependencies (if not already installed):
+         sudo apt install -y build-essential ninja-build cmake
+
+      4. Try installing SageAttention:
+         uv pip install sageattention==2.2.0 --no-build-isolation
+
+      5. Or build from source for RTX 50 series:
+         git clone https://github.com/thu-ml/SageAttention.git
+         cd SageAttention
+         pip install -e .
+
+      The WebUI will work without SageAttention using FlashAttention
+      or xformers as fallback attention mechanisms.
+
+      ============================================================
   when: uv_acceleration_install.rc != 0
 
 - name: Display uv installation summary
