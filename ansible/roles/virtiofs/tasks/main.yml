@@ -1,0 +1,65 @@
+---
+- name: Check if virtiofs tag is available
+  ansible.builtin.shell: |
+    if mount | grep -q virtiofs; then
+      echo "available"
+    elif ls -la /dev/vhost-vsock &>/dev/null; then
+      echo "available"
+    else
+      echo "not_available"
+    fi
+  register: virtiofs_check
+  changed_when: false
+
+- name: Display virtiofs status
+  ansible.builtin.debug:
+    msg: |
+      VirtioFS status: {{ virtiofs_check.stdout }}
+      {% if virtiofs_check.stdout != "available" %}
+      ⚠ VirtioFS not detected. Make sure the VM has a virtiofs device configured.
+      {% endif %}
+
+- name: Create models mount point
+  ansible.builtin.file:
+    path: "{{ forge_install_dir }}/models"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: '0755'
+
+- name: Mount virtiofs models share
+  ansible.builtin.mount:
+    path: "{{ forge_install_dir }}/models"
+    src: models
+    fstype: virtiofs
+    opts: defaults
+    state: mounted
+  become: yes
+  when: virtiofs_check.stdout == "available"
+
+- name: Display virtiofs mount info
+  ansible.builtin.debug:
+    msg: |
+      ✓ VirtioFS models directory mounted at {{ forge_install_dir }}/models
+      Host directory: /media/aubreybailey/vms/models
+      Guest mount: {{ forge_install_dir }}/models
+  when: virtiofs_check.stdout == "available"
+
+- name: Display virtiofs not available message
+  ansible.builtin.debug:
+    msg: |
+      ⚠ VirtioFS not configured for this VM
+
+      To enable model sharing, run on the host:
+        ./host/add-virtiofs-to-vm.sh <VM_NAME>
+
+      Then re-run this playbook.
+  when: virtiofs_check.stdout != "available"
+
+- name: Symlink models directory to Forge Neo app models
+  ansible.builtin.file:
+    src: "{{ forge_install_dir }}/models"
+    dest: "{{ forge_install_dir }}/app/models"
+    state: link
+    force: yes
+  when: virtiofs_check.stdout == "available"

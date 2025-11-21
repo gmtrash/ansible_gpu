@@ -99,7 +99,21 @@ if ssh -o BatchMode=yes -o ConnectTimeout=5 "${VM_USER}@${VM_IP}" echo "test" &>
     echo -e "${GREEN}✓ SSH key authentication available${NC}"
     SSH_KEY_WORKS=true
 else
-    echo -e "${YELLOW}⚠ SSH key not configured, will use password${NC}"
+    echo -e "${YELLOW}⚠ SSH key not configured${NC}"
+    read -p "Copy SSH key to VM now? [Y/n]: " COPY_KEY
+    COPY_KEY=${COPY_KEY:-Y}
+    if [[ $COPY_KEY =~ ^[Yy]$ ]]; then
+        echo -e "${BLUE}Copying SSH key...${NC}"
+        ssh-copy-id "${VM_USER}@${VM_IP}"
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✓ SSH key copied successfully${NC}"
+            SSH_KEY_WORKS=true
+        else
+            echo -e "${YELLOW}⚠ Failed to copy SSH key, will use password${NC}"
+        fi
+    else
+        echo -e "${YELLOW}⚠ Will use password authentication${NC}"
+    fi
 fi
 
 # Run Ansible playbook

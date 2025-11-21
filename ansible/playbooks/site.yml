@@ -15,6 +15,9 @@
     forge_enable_service: true
     forge_start_service: true
 
+    # VirtioFS configuration
+    virtiofs_enabled: true  # Set to false to skip virtiofs mount
+
     # Samba configuration
     samba_enabled: true  # Set to false to skip Samba setup
 
@@ -37,6 +40,10 @@
   roles:
     - role: nvidia
       tags: nvidia
+
+    - role: virtiofs
+      tags: virtiofs
+      when: virtiofs_enabled | default(true)
 
     - role: forge-neo
       tags: forge-neo
