@@ -133,6 +133,33 @@ cd host
 
 ---
 
+### Optional: Share Models Directory (virtiofs)
+
+If you want to share a models directory from your host machine to avoid duplicating large model files:
+
+```bash
+cd host
+./setup-models-virtiofs.sh
+```
+
+**What it does:**
+1. Shuts down the VM temporarily
+2. Configures virtiofs filesystem in VM XML
+3. Mounts your host models directory to `/mnt/models` in the VM
+4. Creates a symlink so Forge Neo can access the models
+5. Restarts the VM and Forge Neo service
+
+**Requirements:**
+- Edit the script first to set your host models directory path (default: `/media/aubreybailey/vms/models/safetensors`)
+- Requires virtiofsd (usually included with QEMU/KVM)
+- VM must have shared memory enabled (configured by default)
+
+**Result:** Models from your host appear in the WebUI under the "shared" folder. No need to copy gigabytes of model files into the VM!
+
+**Time:** 2-3 minutes (includes VM restart)
+
+---
+
 ## After Deployment
 
 ### Access the Web UI
