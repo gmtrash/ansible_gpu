@@ -139,7 +139,24 @@ If you want to share a models directory from your host machine to avoid duplicat
 
 ```bash
 cd host
-./setup-models-virtiofs.sh
+./setup-models-virtiofs.sh --source /path/to/your/models
+```
+
+**Command-line options:**
+```bash
+-v, --vm-name NAME          VM name (default: forge-neo-gpu)
+-s, --source DIR            Host models directory (required)
+-m, --mount-point DIR       Guest mount point (default: /mnt/models)
+-t, --tag TAG               virtiofs tag (default: models-share)
+-h, --help                  Show help message
+```
+
+**Example with custom paths:**
+```bash
+./setup-models-virtiofs.sh \
+  --source /media/user/storage/models \
+  --vm-name my-forge-vm \
+  --mount-point /mnt/shared-models
 ```
 
 **What it does:**
@@ -150,7 +167,6 @@ cd host
 5. Restarts the VM and Forge Neo service
 
 **Requirements:**
-- Edit the script first to set your host models directory path (default: `/media/aubreybailey/vms/models/safetensors`)
 - Requires virtiofsd (usually included with QEMU/KVM)
 - VM must have shared memory enabled (configured by default)
 

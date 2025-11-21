@@ -4,17 +4,71 @@
 
 set -e
 
-# Configuration
-VM_NAME="forge-neo-gpu"
-HOST_MODELS_DIR="/media/aubreybailey/vms/models/safetensors"
-GUEST_MOUNT_POINT="/mnt/models"
-VIRTIOFS_TAG="models-share"
+# Default configuration
+DEFAULT_VM_NAME="forge-neo-gpu"
+DEFAULT_HOST_MODELS_DIR="/media/aubreybailey/vms/models/safetensors"
+DEFAULT_GUEST_MOUNT_POINT="/mnt/models"
+DEFAULT_VIRTIOFS_TAG="models-share"
 
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
+
+# Usage function
+usage() {
+    echo -e "${BLUE}Usage:${NC} $0 [OPTIONS]"
+    echo ""
+    echo "Setup virtiofs filesystem sharing for Forge Neo models directory"
+    echo ""
+    echo -e "${BLUE}Options:${NC}"
+    echo "  -v, --vm-name NAME          VM name (default: $DEFAULT_VM_NAME)"
+    echo "  -s, --source DIR            Host models directory (default: $DEFAULT_HOST_MODELS_DIR)"
+    echo "  -m, --mount-point DIR       Guest mount point (default: $DEFAULT_GUEST_MOUNT_POINT)"
+    echo "  -t, --tag TAG               virtiofs tag (default: $DEFAULT_VIRTIOFS_TAG)"
+    echo "  -h, --help                  Show this help message"
+    echo ""
+    echo -e "${BLUE}Example:${NC}"
+    echo "  $0 --source /path/to/models --vm-name my-vm"
+    echo "  $0 -s /data/models -v forge-neo-gpu -m /mnt/shared-models"
+    exit 0
+}
+
+# Parse command line arguments
+VM_NAME="$DEFAULT_VM_NAME"
+HOST_MODELS_DIR="$DEFAULT_HOST_MODELS_DIR"
+GUEST_MOUNT_POINT="$DEFAULT_GUEST_MOUNT_POINT"
+VIRTIOFS_TAG="$DEFAULT_VIRTIOFS_TAG"
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -v|--vm-name)
+            VM_NAME="$2"
+            shift 2
+            ;;
+        -s|--source)
+            HOST_MODELS_DIR="$2"
+            shift 2
+            ;;
+        -m|--mount-point)
+            GUEST_MOUNT_POINT="$2"
+            shift 2
+            ;;
+        -t|--tag)
+            VIRTIOFS_TAG="$2"
+            shift 2
+            ;;
+        -h|--help)
+            usage
+            ;;
+        *)
+            echo -e "${RED}Error: Unknown option $1${NC}"
+            usage
+            ;;
+    esac
+done
 
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}Forge Neo - virtiofs Models Setup${NC}"
