@@ -218,28 +218,35 @@ done
 
 echo -e "${GREEN}✓${NC} SSH is available"
 
-# Configure guest mounting
-echo "Configuring virtiofs mount in guest..."
+# Detect the actual virtiofs tag from VM XML (in case it was already configured)
+ACTUAL_TAG=$(virsh dumpxml "$VM_NAME" | grep -oP "(?<=<target dir=')[^']+(?='/>)" | head -1)
+if [ -n "$ACTUAL_TAG" ]; then
+    echo "Detected existing virtiofs tag: $ACTUAL_TAG"
+    VIRTIOFS_TAG="$ACTUAL_TAG"
+fi
 
-ssh "ubuntu@$VM_IP" bash <<'EOSSH'
+# Configure guest mounting
+echo "Configuring virtiofs mount in guest using tag: $VIRTIOFS_TAG..."
+
+ssh "ubuntu@$VM_IP" bash <<EOSSH
 set -e
 
 # Create mount point
-sudo mkdir -p /mnt/models
+sudo mkdir -p "$GUEST_MOUNT_POINT"
 
 # Mount virtiofs
-if ! mountpoint -q /mnt/models; then
+if ! mountpoint -q "$GUEST_MOUNT_POINT"; then
     echo "Mounting virtiofs..."
-    sudo mount -t virtiofs models-share /mnt/models
-    echo "✓ Mounted virtiofs at /mnt/models"
+    sudo mount -t virtiofs "$VIRTIOFS_TAG" "$GUEST_MOUNT_POINT"
+    echo "✓ Mounted virtiofs at $GUEST_MOUNT_POINT"
 else
     echo "✓ Already mounted"
 fi
 
 # Add to fstab if not present
-if ! grep -q "models-share" /etc/fstab; then
+if ! grep -q "$VIRTIOFS_TAG" /etc/fstab; then
     echo "Adding to /etc/fstab for automatic mounting..."
-    echo "models-share  /mnt/models  virtiofs  defaults  0  0" | sudo tee -a /etc/fstab
+    echo "$VIRTIOFS_TAG  $GUEST_MOUNT_POINT  virtiofs  defaults  0  0" | sudo tee -a /etc/fstab
     echo "✓ Added to fstab"
 else
     echo "✓ Already in fstab"
@@ -247,7 +254,7 @@ fi
 
 # Test the mount
 echo "Testing mount..."
-ls -la /mnt/models/ | head -5
+ls -la "$GUEST_MOUNT_POINT" | head -5
 EOSSH
 
 echo -e "${GREEN}✓${NC} Guest mounting configured"
@@ -255,15 +262,15 @@ echo -e "${GREEN}✓${NC} Guest mounting configured"
 # Set up symlinks
 echo "Setting up symlinks to Forge Neo models directory..."
 
-ssh "ubuntu@$VM_IP" bash <<'EOSSH'
+ssh "ubuntu@$VM_IP" bash <<EOSSH
 set -e
 
 FORGE_MODELS_DIR="/home/ubuntu/forge-neo/app/models/Stable-diffusion"
 
 # Create shared subdirectory if it doesn't exist
-if [ ! -L "$FORGE_MODELS_DIR/shared" ] && [ ! -d "$FORGE_MODELS_DIR/shared" ]; then
-    echo "Creating symlink: $FORGE_MODELS_DIR/shared -> /mnt/models"
-    ln -s /mnt/models "$FORGE_MODELS_DIR/shared"
+if [ ! -L "\$FORGE_MODELS_DIR/shared" ] && [ ! -d "\$FORGE_MODELS_DIR/shared" ]; then
+    echo "Creating symlink: \$FORGE_MODELS_DIR/shared -> $GUEST_MOUNT_POINT"
+    ln -s "$GUEST_MOUNT_POINT" "\$FORGE_MODELS_DIR/shared"
     echo "✓ Symlink created"
 else
     echo "✓ Symlink already exists"
@@ -271,8 +278,8 @@ fi
 
 # List available models
 echo ""
-echo "Available models in /mnt/models:"
-ls -lh /mnt/models/ | grep -E "\.safetensors|\.ckpt" || echo "No models found (might be in subdirectories)"
+echo "Available models in $GUEST_MOUNT_POINT:"
+ls -lh "$GUEST_MOUNT_POINT" | grep -E "\.safetensors|\.ckpt" || echo "No models found (might be in subdirectories)"
 EOSSH
 
 echo -e "${GREEN}✓${NC} Symlinks configured"
